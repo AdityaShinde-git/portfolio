@@ -1,0 +1,11 @@
+Surface textures used by Signal Ridge:
+
+- aerial_grass_rock_diff_2k.jpg
+- aerial_grass_rock_nor_dx_1k.jpg
+- dirt_aerial_02_diff_2k.jpg
+- dirt_aerial_02_nor_dx_2k.jpg
+
+Sources:
+- Aerial Grass Rock: https://polyhaven.com/a/aerial_grass_rock
+- Dirt Aerial 02: https://polyhaven.com/a/dirt_aerial_02
+License: CC0 1.0 Universal (https://polyhaven.com/license)

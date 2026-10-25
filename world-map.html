@@ -1,0 +1,624 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Signal Ridge — World Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0e110d; --panel:#141913; --panel2:#1a2019; --line:#2b3328;
+  --amber:#e3a964; --amber-d:#a87a43; --ink:#ece9de; --mute:#8d9380;
+  --water:#6fa3ae; --road:#b5a574;
+  --mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
+  --sans:'Inter Tight',system-ui,-apple-system,Segoe UI,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--sans)}
+button{font:inherit;color:inherit;cursor:pointer}
+kbd{font:500 10px var(--mono);padding:1px 5px;border:1px solid var(--line);border-radius:4px;color:var(--mute)}
+
+/* demo backdrop (stand-in for the 3D scene) */
+.scene{position:fixed;inset:0;background:
+  radial-gradient(60% 40% at 60% 12%,rgba(205,110,100,.55),transparent 70%),
+  linear-gradient(#6c6470 0%,#3c3a3f 38%,#15190f 60%,#0c0f0a 100%)}
+.openbtn{position:fixed;top:18px;right:18px;z-index:2;background:rgba(10,12,9,.8);border:1px solid var(--line);
+  padding:9px 14px;border-radius:6px;font:700 11px var(--mono);letter-spacing:.08em;text-transform:uppercase}
+.openbtn:hover{border-color:var(--amber)}
+
+.scrim{position:fixed;inset:0;z-index:10;display:grid;place-items:center;background:rgba(0,0,0,.5);backdrop-filter:blur(3px)}
+.scrim[hidden]{display:none}
+.dlg{position:relative;width:min(1200px,96vw);height:min(740px,93vh);display:grid;grid-template-rows:auto 1fr;
+  background:var(--panel);border:1px solid var(--line);border-radius:6px;box-shadow:0 30px 90px rgba(0,0,0,.6);overflow:hidden}
+.hd{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;padding:22px 28px 16px}
+.eyebrow{font:500 10px var(--mono);letter-spacing:.16em;color:var(--amber);text-transform:uppercase}
+h2{margin:8px 0 6px;font:700 34px/1 var(--sans);letter-spacing:-.04em}
+.sub{margin:0;color:var(--mute);font-size:13px}
+.hd-r{display:flex;gap:14px;align-items:center}
+.prog{display:flex;flex-direction:column;gap:6px;min-width:130px;font:500 11px var(--mono);color:var(--amber);letter-spacing:.06em}
+.bar{height:3px;background:var(--line);border-radius:2px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--amber);transition:width .4s}
+.x{width:38px;height:38px;border-radius:50%;background:var(--panel2);border:1px solid var(--line);font-size:20px;line-height:1}
+.x:hover{border-color:var(--amber)}
+
+.body{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:20px;padding:0 28px 24px;min-height:0}
+.mapcol{display:grid;grid-template-rows:minmax(0,1fr) auto;gap:10px;min-height:0}
+.mapwrap{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:4px;background:#1a2216;cursor:grab;touch-action:none;user-select:none}
+.mapwrap.drag{cursor:grabbing}
+.world{position:absolute;left:0;top:0;width:1000px;height:640px;transform-origin:0 0;will-change:transform}
+.world canvas,.world svg{position:absolute;left:0;top:0;width:1000px;height:640px;pointer-events:none}
+.vig{position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 90px rgba(5,7,4,.75)}
+.pins{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+
+/* svg styling */
+.c-minor{fill:none;stroke:rgba(232,222,184,.11);stroke-width:1;vector-effect:non-scaling-stroke}
+.c-index{fill:none;stroke:rgba(232,222,184,.26);stroke-width:1.2;vector-effect:non-scaling-stroke}
+.river-c{fill:none;stroke:rgba(14,28,32,.85);stroke-width:9;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.river{fill:none;stroke:var(--water);stroke-width:3.2;stroke-linecap:round;opacity:.95;vector-effect:non-scaling-stroke}
+.river-f{fill:none;stroke:rgba(210,240,245,.55);stroke-width:1;stroke-dasharray:3 9;vector-effect:non-scaling-stroke;animation:flow 2.4s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-24}}
+.lake{fill:#355761;stroke:var(--water);stroke-width:1.5;vector-effect:non-scaling-stroke}
+.rd-c{fill:none;stroke:rgba(8,10,6,.7);stroke-width:7;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.rd{fill:none;stroke:#6f6a4f;stroke-width:3.6;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.rd.open{stroke:var(--amber)}
+.rd.trail{stroke:#7d7552;stroke-width:2.2;stroke-dasharray:7 6;stroke-linecap:butt}
+.rd.trail.open{stroke:var(--amber-d)}
+.rd-c.trail{stroke-width:5}
+.house{fill:#171c14;stroke:#444b37;stroke-width:1;vector-effect:non-scaling-stroke}
+.win{fill:#4a4a3c}.win.on{fill:#ffd08a;filter:drop-shadow(0 0 3px #ffb454)}
+.route{stroke:#fff3d6;stroke-width:2;stroke-dasharray:6 6;vector-effect:non-scaling-stroke;animation:flow .9s linear infinite;opacity:.9}
+.no-contours #gContours{display:none}
+.no-roads #gRoads{display:none}
+.no-fog #fog{display:none}
+
+/* pins */
+.pin{position:absolute;left:0;top:0;width:0;height:0;padding:0;border:0;background:none;pointer-events:auto;z-index:3}
+.pin .dot{position:absolute;left:-13px;top:-13px;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;
+  font:700 11px var(--mono);background:#182016;color:var(--mute);border:1.5px solid #66705a;transition:transform .2s,box-shadow .2s}
+.pin .ring{position:absolute;left:-13px;top:-13px;width:26px;height:26px;border-radius:50%;border:1.5px solid var(--amber);opacity:0}
+.pin.lit .dot{background:var(--amber);color:#1b1408;border-color:#ffd9a0;box-shadow:0 0 0 4px rgba(227,169,100,.18),0 0 22px rgba(227,169,100,.6)}
+.pin.lit .ring{animation:pulse 2.6s ease-out infinite}
+.pin.work .dot{background:#1d2318;color:var(--amber);border-color:var(--amber)}
+@keyframes pulse{0%{transform:scale(1);opacity:.7}100%{transform:scale(2.7);opacity:0}}
+.pin.sel .dot{transform:scale(1.25);outline:2px solid #fff3d6;outline-offset:3px}
+.pin .lbl{position:absolute;left:20px;top:-15px;white-space:nowrap;display:flex;flex-direction:column;gap:2px;padding:3px 8px;
+  border-radius:5px;background:rgba(12,15,11,.78);backdrop-filter:blur(3px);border:1px solid rgba(255,255,255,.07);text-align:left}
+.pin.flip .lbl{left:auto;right:20px;text-align:right}
+.lbl b{font:600 12px var(--sans);letter-spacing:-.01em}
+.lbl i{display:none;font:400 9.5px var(--mono);color:var(--mute);font-style:normal}
+.pin.sel .lbl i,.pin:hover .lbl i{display:block}
+.pin:hover{z-index:6}.pin.sel{z-index:5}
+.no-labels .pin.loc:not(.sel):not(:hover) .lbl{display:none}
+.no-poi .poi{display:none!important}
+.poi{z-index:2;pointer-events:none}
+.poi .d{position:absolute;left:-4px;top:-4px;width:8px;height:8px;transform:rotate(45deg);background:#d8cfa6;border:1px solid #1b1408;opacity:.85}
+.poi span{position:absolute;left:9px;top:-7px;white-space:nowrap;font:500 9.5px var(--mono);color:#d8cfa6;text-shadow:0 1px 3px #000,0 0 6px #000}
+.region{position:absolute;left:0;top:0;white-space:nowrap;font:500 10px var(--mono);letter-spacing:.5em;color:rgba(236,233,222,.28);
+  text-shadow:0 1px 4px #000;transition:opacity .3s;z-index:1}
+.you{z-index:4;pointer-events:none}
+.you svg{position:absolute;left:-30px;top:-30px;overflow:visible}
+.you .acc{animation:pulse 2s ease-out infinite;transform-origin:0 0}
+.you em{position:absolute;left:14px;top:8px;font:700 9px var(--mono);letter-spacing:.1em;color:#fff3d6;font-style:normal;text-shadow:0 1px 3px #000}
+.rlabel{position:absolute;left:0;top:0;pointer-events:none;z-index:4;font:500 10px var(--mono);padding:3px 7px;border-radius:4px;
+  background:rgba(12,15,11,.85);border:1px solid rgba(255,243,214,.35);color:#fff3d6;white-space:nowrap}
+
+/* overlays */
+.layers{position:absolute;left:12px;top:12px;display:flex;gap:6px;flex-wrap:wrap;z-index:8;max-width:70%}
+.chip{font:500 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;padding:5px 9px;border-radius:999px;
+  background:rgba(12,15,11,.78);border:1px solid var(--line);color:var(--mute);backdrop-filter:blur(3px)}
+.chip.on{color:var(--amber);border-color:rgba(227,169,100,.5)}
+.compass{position:absolute;right:12px;top:12px;z-index:8;width:54px;height:54px;pointer-events:none}
+.zoom{position:absolute;right:12px;top:78px;z-index:8;display:flex;flex-direction:column;gap:4px}
+.zoom button{width:34px;height:34px;border-radius:6px;background:rgba(12,15,11,.82);border:1px solid var(--line);font:500 16px var(--mono)}
+.zoom button:hover{border-color:var(--amber);color:var(--amber)}
+.scale{position:absolute;left:14px;bottom:12px;z-index:8;font:500 10px var(--mono);color:#d8d4c2;display:flex;flex-direction:column;gap:3px;text-shadow:0 1px 3px #000}
+.scale i{display:block;height:5px;border:1.5px solid #d8d4c2;border-top:0}
+.readout{position:absolute;right:12px;bottom:12px;z-index:8;font:500 10px var(--mono);color:#d8d4c2;padding:4px 8px;border-radius:4px;background:rgba(12,15,11,.75);letter-spacing:.04em}
+.card{position:absolute;left:12px;bottom:46px;z-index:9;width:300px;padding:14px 16px;border-radius:6px;border:1px solid var(--line);
+  background:rgba(16,20,15,.92);backdrop-filter:blur(6px);box-shadow:0 12px 30px rgba(0,0,0,.45);border-left:3px solid var(--amber)}
+.card[hidden]{display:none}
+.card .k{font:500 9.5px var(--mono);letter-spacing:.14em;color:var(--amber);text-transform:uppercase}
+.card h3{margin:5px 0 3px;font:700 21px var(--sans);letter-spacing:-.03em}
+.card p{margin:0 0 10px;font-size:12px;color:var(--mute)}
+.stats{display:flex;gap:14px;font:500 10px var(--mono);color:#cfcbb9;margin-bottom:12px}
+.stats b{display:block;color:var(--ink);font-size:12px;margin-top:2px}
+.go{width:100%;padding:9px;border-radius:5px;border:1px solid var(--amber);background:var(--amber);color:#1b1408;font:700 11px var(--mono);letter-spacing:.1em;text-transform:uppercase}
+.go:hover{background:#f2bd7e}
+.cx{position:absolute;right:8px;top:6px;background:none;border:0;color:var(--mute);font-size:16px}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font:500 9.5px var(--mono);letter-spacing:.1em;color:var(--mute);text-transform:uppercase}
+.legend span{display:flex;align-items:center;gap:7px}
+.lg-l{width:20px;height:3px;background:var(--road);border-radius:2px}
+.lg-t{width:20px;height:0;border-top:2px dashed #7d7552}
+.lg-r{width:20px;height:3px;background:var(--water);border-radius:2px}
+.lg-d{width:10px;height:10px;border-radius:50%;background:var(--amber);box-shadow:0 0 8px var(--amber)}
+.lg-o{width:10px;height:10px;border-radius:50%;border:1.5px solid #66705a}
+
+/* list */
+.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:4px;overflow:auto;background:var(--panel)}
+.list li{border-bottom:1px solid var(--line)}
+.list li:last-child{border-bottom:0}
+.list li.sep{border-top:2px solid var(--line)}
+.it{display:grid;grid-template-columns:26px 1fr auto 22px;gap:10px;align-items:center;width:100%;text-align:left;padding:13px 14px;background:none;border:0}
+.it:hover,.it.sel{background:#1c2218}
+.it.sel{box-shadow:inset 3px 0 0 var(--amber)}
+.it .n{font:500 10px var(--mono);color:var(--amber-d)}
+.it .t b{display:block;font:600 14px var(--sans);letter-spacing:-.02em}
+.it .t i{display:block;font:400 10.5px var(--sans);color:var(--mute);font-style:normal;margin-top:2px}
+.it .m{font:500 10px var(--mono);color:var(--mute);text-align:right}
+.it .m u{display:block;text-decoration:none;color:var(--mute);margin-top:2px}
+.it .m .st{color:var(--amber)}
+.it .go2{width:22px;height:22px;border-radius:4px;border:1px solid var(--line);display:grid;place-items:center;font-size:11px;color:var(--mute)}
+.it .go2:hover{border-color:var(--amber);color:var(--amber)}
+.toast{position:absolute;left:50%;bottom:20px;transform:translate(-50%,20px);opacity:0;pointer-events:none;z-index:20;
+  font:500 11px var(--mono);letter-spacing:.06em;padding:9px 14px;border-radius:6px;background:#0c0f0b;border:1px solid var(--amber);color:var(--amber);transition:.3s}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+@media (max-width:860px){
+  .dlg{height:96vh;overflow:auto;display:block}
+  .body{grid-template-columns:1fr}
+  .mapwrap{height:60vh}
+  h2{font-size:26px}
+  .card{width:calc(100% - 24px)}
+}
+</style>
+</head>
+<body>
+<div class="scene"></div>
+<button class="openbtn" id="openBtn">Open map <kbd>M</kbd></button>
+
+<div class="scrim" id="scrim">
+ <section class="dlg" role="dialog" aria-modal="true" aria-labelledby="ttl">
+  <header class="hd">
+    <div>
+      <div class="eyebrow">Signal Ridge · The Last Signal</div>
+      <h2 id="ttl">Choose a place to explore</h2>
+      <p class="sub">Take the old pass, follow the river, or climb for the signal fires.</p>
+    </div>
+    <div class="hd-r">
+      <div class="prog"><span id="progTxt"></span><div class="bar"><i id="progBar"></i></div></div>
+      <button class="x" id="closeBtn" aria-label="Close map">×</button>
+    </div>
+  </header>
+
+  <div class="body">
+    <div class="mapcol">
+      <div class="mapwrap" id="mapwrap">
+        <div class="world" id="world">
+          <canvas id="terrain" width="2000" height="1280"></canvas>
+          <svg id="svg" viewBox="0 0 1000 640"></svg>
+          <canvas id="fog" width="1000" height="640"></canvas>
+        </div>
+        <div class="vig"></div>
+        <div class="pins" id="pins"></div>
+        <div class="layers" id="layers"></div>
+        <svg class="compass" viewBox="-30 -30 60 60">
+          <circle r="26" fill="rgba(12,15,11,.78)" stroke="#2b3328"/>
+          <path d="M0-21 L5 0 L0-3 L-5 0Z" fill="#e3a964"/><path d="M0 21 L5 0 L0 3 L-5 0Z" fill="#555c49"/>
+          <text y="-9" x="0" font-size="0" /><text x="0" y="-23.5" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="8" font-weight="700" fill="#e3a964" style="paint-order:stroke" stroke="#0c0f0b" stroke-width="2">N</text>
+        </svg>
+        <div class="zoom">
+          <button id="zin" title="Zoom in (+)">+</button>
+          <button id="zout" title="Zoom out (−)">−</button>
+          <button id="zme" title="Centre on you (Y)">◎</button>
+          <button id="zfit" title="Show whole world (0)">⤢</button>
+        </div>
+        <div class="card" id="card" hidden></div>
+        <div class="scale" id="scale"><span></span><i></i></div>
+        <div class="readout" id="readout">drag to pan · scroll to zoom</div>
+      </div>
+      <div class="legend">
+        <span><i class="lg-l"></i>Old pass</span><span><i class="lg-t"></i>Trail</span><span><i class="lg-r"></i>River</span>
+        <span><i class="lg-d"></i>Signal lit</span><span><i class="lg-o"></i>Signal dark</span>
+      </div>
+    </div>
+    <ul class="list" id="list"></ul>
+  </div>
+  <div class="toast" id="toast"></div>
+ </section>
+</div>
+
+<script>
+(() => {
+'use strict';
+/* =====================================================================
+   WORLD DATA — edit this block to grow the world. Everything on the map
+   (terrain, fog, roads, pins, list) is generated from it.
+   Coordinates are in map units (0..1000 × 0..640). 1 unit = metersPerUnit.
+   ===================================================================== */
+const W = 1000, H = 640;
+const WORLD = {
+  metersPerUnit: 6,
+  locations: [
+    { id:1, name:'The Trailhead',      sub:'Languages · complete skills board',  x:130, y:150, lit:true  },
+    { id:2, name:'The River Crossing', sub:'Frontend · ford and timber bridge',  x:385, y:185, lit:true  },
+    { id:3, name:'The Ashen Settlement',sub:'Backend · lantern-lit village loop',x:470, y:330, lit:true  },
+    { id:4, name:'The Old Giant',      sub:'Databases · fossil ridge vista',     x:700, y:300, lit:false },
+    { id:5, name:'The Last Signal',    sub:'Architecture · final ridge beacon',  x:860, y:110, lit:false },
+    { id:6, name:'The High Pass',      sub:'Tools · mountain switchbacks',       x:640, y:500, lit:false },
+    { id:'mw', name:'Motor Works',     sub:'Enter the vehicle workshop',          x:200, y:520, kind:'work' },
+  ],
+  // roads: waypoints are smoothed with a spline. open = both ends lit.
+  roads: [
+    { from:1, to:2,    kind:'pass',  pts:[[130,150],[200,115],[290,140],[385,185]] },
+    { from:2, to:3,    kind:'pass',  pts:[[385,185],[425,250],[445,295],[470,330]] },
+    { from:3, to:4,    kind:'pass',  pts:[[470,330],[540,365],[610,335],[700,300]] },
+    { from:4, to:5,    kind:'pass',  pts:[[700,300],[765,250],[805,170],[860,110]] },
+    { from:3, to:6,    kind:'pass',  pts:[[470,330],[500,420],[570,470],[640,500]] },
+    { from:6, to:4,    kind:'trail', pts:[[640,500],[700,470],[650,435],[705,395],[660,350],[700,300]] },
+    { from:1, to:'mw', kind:'trail', pts:[[130,150],[105,260],[150,400],[200,520]] },
+    { from:'mw',to:3,  kind:'trail', pts:[[200,520],[262,470],[337,408],[405,378],[470,330]] },
+  ],
+  river: [[560,-10],[530,70],[470,120],[420,150],[385,185],[345,235],[330,300],[350,370],[320,440],[300,520],[320,600],[310,660]],
+  lake:  { x:585, y:215, rx:36, ry:17, rot:-20, name:'Mirror Tarn' },
+  pois: [
+    { name:'Waterfall',      x:468, y:122 },
+    { name:'Old bridge',     x:337, y:408 },
+    { name:'Mirror Tarn',    x:585, y:215 },
+    { name:'Fossil beds',    x:742, y:338 },
+    { name:'Watchtower ruin',x:246, y:300 },
+    { name:'Quarry',         x:790, y:430 },
+    { name:'Fire ring',      x:575, y:352 },
+  ],
+  regions: [
+    { name:'SIGNAL RANGE',   x:810, y:48,  rot:-4 },
+    { name:'FOSSIL RIDGE',   x:760, y:232, rot:-14 },
+    { name:'THE ASHEN VALE', x:430, y:420, rot:0 },
+    { name:'THE LOWLANDS',   x:120, y:350, rot:-6 },
+    { name:'THE HIGH PASS',  x:700, y:590, rot:2 },
+    { name:'RIVERLANDS',     x:300, y:60,  rot:0 },
+  ],
+};
+const LOCS = WORLD.locations;
+const byId = id => LOCS.find(l => l.id === id);
+const numbered = () => LOCS.filter(l => typeof l.id === 'number');
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+const clamp = (v,a,b) => Math.min(b, Math.max(a, v));
+function rng(seed){return()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function cr(a,b,c,d,t){const t2=t*t,t3=t2*t;return .5*((2*b)+(-a+c)*t+(2*a-5*b+4*c-d)*t2+(-a+3*b-3*c+d)*t3)}
+function spline(pts,seg=10){
+  const P=[pts[0],...pts,pts[pts.length-1]],out=[];
+  for(let i=1;i<P.length-2;i++)for(let s=0;s<seg;s++){const t=s/seg;
+    out.push([cr(P[i-1][0],P[i][0],P[i+1][0],P[i+2][0],t),cr(P[i-1][1],P[i][1],P[i+1][1],P[i+2][1],t)]);}
+  out.push(pts[pts.length-1]);return out;
+}
+const dOf = pts => 'M'+pts.map(p=>p[0].toFixed(1)+' '+p[1].toFixed(1)).join('L');
+function minDist(x,y,pts){let m=1e9;for(const p of pts){const d=(p[0]-x)**2+(p[1]-y)**2;if(d<m)m=d}return Math.sqrt(m)}
+
+/* ---------- procedural terrain ---------- */
+const riverPts = spline(WORLD.river,10);
+const roadPts = WORLD.roads.map(r => ({...r, s: spline(r.pts,10)}));
+const allRoad = roadPts.flatMap(r=>r.s);
+const gauss=(x,y,cx,cy,sx,sy,a)=>a*Math.exp(-(((x-cx)/sx)**2+((y-cy)/sy)**2));
+function height(x,y){
+  let h=.22;
+  h+=gauss(x,y,860,100,125,110,.68);
+  h+=gauss(x,y,700,300,115,70,.40);
+  h+=gauss(x,y,560,545,100,80,.44);
+  h+=gauss(x,y,790,545,90,80,.48);
+  h+=gauss(x,y,100,40,150,90,.26);
+  h+=gauss(x,y,965,420,70,120,.30);
+  h+=gauss(x,y,250,615,120,60,.18);
+  h+=.045*Math.sin(x*.021+1.3)*Math.cos(y*.017)+.03*Math.sin(x*.047+y*.039)+.018*Math.sin(x*.09-y*.07+2)+.01*Math.sin(x*.17+y*.13);
+  h-=.14*Math.exp(-((minDist(x,y,riverPts)/20)**2));
+  return clamp(h,0,1);
+}
+const GW=250,GH=160,CS=4;
+const G=new Float32Array((GW+1)*(GH+1));
+for(let j=0;j<=GH;j++)for(let i=0;i<=GW;i++)G[j*(GW+1)+i]=height(i*CS,j*CS);
+const gv=(i,j)=>G[clamp(j,0,GH)*(GW+1)+clamp(i,0,GW)];
+function elevAt(x,y){
+  const fx=clamp(x/CS,0,GW-.001),fy=clamp(y/CS,0,GH-.001),i=fx|0,j=fy|0,u=fx-i,v=fy-j;
+  const h=gv(i,j)*(1-u)*(1-v)+gv(i+1,j)*u*(1-v)+gv(i,j+1)*(1-u)*v+gv(i+1,j+1)*u*v;
+  return Math.round(900+h*2100);
+}
+const hexRGB=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+const RAMP=[[0,'#141b12'],[.2,'#1d2618'],[.35,'#2a341f'],[.5,'#394127'],[.65,'#4b4933'],[.8,'#625b45'],[1,'#8e8975']].map(([t,c])=>[t,hexRGB(c)]);
+function ramp(h){for(let i=1;i<RAMP.length;i++){if(h<=RAMP[i][0]){const[a,ca]=RAMP[i-1],[b,cb]=RAMP[i],t=(h-a)/(b-a);return ca.map((v,k)=>v+(cb[k]-v)*t)}}return RAMP.at(-1)[1]}
+
+function drawTerrain(){
+  const tmp=document.createElement('canvas');tmp.width=GW;tmp.height=GH;
+  const tc=tmp.getContext('2d'),img=tc.createImageData(GW,GH);
+  for(let j=0;j<GH;j++)for(let i=0;i<GW;i++){
+    const h=gv(i,j),s=((gv(i+1,j)-gv(i-1,j))+(gv(i,j+1)-gv(i,j-1)))*7;
+    const m=1+clamp(s,-.55,.65),c=ramp(h),o=(j*GW+i)*4;
+    const wd=minDist(i*CS,j*CS,riverPts),wt=Math.exp(-((wd/7)**2))*.5;
+    img.data[o]=clamp(c[0]*m*(1-wt)+40*wt,0,255);
+    img.data[o+1]=clamp(c[1]*m*(1-wt)+70*wt,0,255);
+    img.data[o+2]=clamp(c[2]*m*(1-wt)+78*wt,0,255);img.data[o+3]=255;
+  }
+  tc.putImageData(img,0,0);
+  const cv=$('#terrain'),ctx=cv.getContext('2d');
+  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+  ctx.drawImage(tmp,0,0,cv.width,cv.height);
+  // forest
+  const r=rng(7);ctx.save();ctx.scale(2,2);let n=0;
+  for(let a=0;a<14000&&n<2300;a++){
+    const x=r()*W,y=r()*H,h=elevAt(x,y);const hh=(h-900)/2100;
+    if(hh<.2||hh>.56)continue;
+    const dens=.5+.5*Math.sin(x*.013+1)*Math.cos(y*.017+2)+.25*Math.sin(x*.05+y*.04);
+    if(r()>dens*.9)continue;
+    if(minDist(x,y,riverPts)<13||minDist(x,y,allRoad)<11)continue;
+    if(LOCS.some(l=>Math.hypot(l.x-x,l.y-y)<26))continue;
+    const s=2.6+r()*2.6;
+    ctx.fillStyle=`rgba(${10+r()*8|0},${26+r()*18|0},${12+r()*8|0},.8)`;
+    ctx.beginPath();ctx.moveTo(x,y-s*1.4);ctx.lineTo(x+s*.8,y+s*.5);ctx.lineTo(x-s*.8,y+s*.5);ctx.fill();
+    ctx.fillStyle='rgba(120,150,90,.18)';ctx.beginPath();ctx.moveTo(x,y-s*1.4);ctx.lineTo(x-s*.8,y+s*.5);ctx.lineTo(x-s*.1,y+s*.3);ctx.fill();
+    n++;
+  }
+  ctx.restore();
+}
+
+/* marching-squares contours */
+const CASES=[[],[[3,2]],[[2,1]],[[3,1]],[[0,1]],[[0,3],[1,2]],[[0,2]],[[0,3]],[[0,3]],[[0,2]],[[0,1],[2,3]],[[0,1]],[[3,1]],[[2,1]],[[3,2]],[]];
+function contourPath(level){
+  let d='';
+  const ip=(a,b,va,vb)=>a+(b-a)*((level-va)/(vb-va||1e-6));
+  for(let j=0;j<GH;j++)for(let i=0;i<GW;i++){
+    const tl=gv(i,j),tr=gv(i+1,j),br=gv(i+1,j+1),bl=gv(i,j+1);
+    const c=(tl>=level?8:0)|(tr>=level?4:0)|(br>=level?2:0)|(bl>=level?1:0);
+    if(!CASES[c].length)continue;
+    const x=i*CS,y=j*CS;
+    const E=[[ip(x,x+CS,tl,tr),y],[x+CS,ip(y,y+CS,tr,br)],[ip(x,x+CS,bl,br),y+CS],[x,ip(y,y+CS,tl,bl)]];
+    for(const[a,b]of CASES[c])d+=`M${E[a][0].toFixed(1)} ${E[a][1].toFixed(1)}L${E[b][0].toFixed(1)} ${E[b][1].toFixed(1)}`;
+  }
+  return d;
+}
+
+/* ---------- state ---------- */
+const S={k:1,tx:0,ty:0,sel:1,player:{x:300,y:285,h:60},layers:{contours:1,fog:1,labels:1,poi:1,roads:1},inited:false,moving:false};
+const api={onTravel:null};
+let vw=0,vh=0,minK=1,fitK=1;
+const wrap=$('#mapwrap'),world=$('#world'),pinsEl=$('#pins'),svg=$('#svg');
+
+/* ---------- SVG layers ---------- */
+function buildSVG(){
+  let c='';
+  for(let l=.12,n=0;l<.98;l+=.04,n++)c+=`<path class="${n%4===0?'c-index':'c-minor'}" d="${contourPath(l)}"/>`;
+  const rd=dOf(riverPts);
+  svg.innerHTML=`
+   <g id="gContours">${c}</g>
+   <g id="gWater">
+     <ellipse class="lake" cx="${WORLD.lake.x}" cy="${WORLD.lake.y}" rx="${WORLD.lake.rx}" ry="${WORLD.lake.ry}" transform="rotate(${WORLD.lake.rot} ${WORLD.lake.x} ${WORLD.lake.y})"/>
+     <path class="river-c" d="${rd}"/><path class="river" d="${rd}"/><path class="river-f" d="${rd}"/>
+   </g>
+   <g id="gRoads"></g><g id="gSettle"></g>
+   <g id="gRoute"><line id="routeLine" class="route" x1="0" y1="0" x2="0" y2="0" style="display:none"/></g>`;
+  renderRoads();
+}
+function renderRoads(){
+  $('#gRoads').innerHTML=roadPts.map(r=>{
+    const open=byId(r.from)?.lit&&byId(r.to)?.lit,d=dOf(r.s),t=r.kind==='trail'?' trail':'';
+    return `<path class="rd-c${t}" d="${d}"/><path class="rd${t}${open?' open':''}" d="${d}"/>`;}).join('');
+  const a=byId(3),on=a.lit;
+  const H_=[[-22,-14,6],[-12,-23,5],[14,-19,6],[24,-4,5],[-32,6,6],[-9,17,7],[18,15,5],[35,19,6],[-25,25,5],[40,-12,5]];
+  $('#gSettle').innerHTML=H_.map(([dx,dy,s])=>`<rect class="house" x="${a.x+dx}" y="${a.y+dy}" width="${s}" height="${s*.8}"/><rect class="win${on?' on':''}" x="${a.x+dx+s*.35}" y="${a.y+dy+s*.25}" width="1.6" height="1.6"/>`).join('');
+}
+
+/* ---------- fog of war ---------- */
+function drawFog(){
+  const c=$('#fog').getContext('2d');
+  c.globalCompositeOperation='source-over';c.clearRect(0,0,W,H);
+  c.fillStyle='rgba(6,8,5,.6)';c.fillRect(0,0,W,H);
+  c.globalCompositeOperation='destination-out';
+  const hole=(x,y,r,a=1)=>{const g=c.createRadialGradient(x,y,r*.3,x,y,r);g.addColorStop(0,`rgba(0,0,0,${a})`);g.addColorStop(1,'rgba(0,0,0,0)');c.fillStyle=g;c.beginPath();c.arc(x,y,r,0,7);c.fill()};
+  LOCS.forEach(l=>hole(l.x,l.y,l.lit?190:(l.kind==='work'?110:60),l.lit||l.kind==='work'?1:.85));
+  roadPts.forEach(r=>{if(byId(r.from)?.lit&&byId(r.to)?.lit)r.s.forEach((p,i)=>{if(i%3===0)hole(p[0],p[1],60,.7)})});
+  hole(S.player.x,S.player.y,135);
+  c.globalCompositeOperation='source-over';
+}
+
+/* ---------- pins ---------- */
+const items=[];
+function buildPins(){
+  pinsEl.innerHTML='';items.length=0;
+  WORLD.regions.forEach(r=>{const e=document.createElement('div');e.className='region';e.textContent=r.name;pinsEl.append(e);items.push({el:e,x:r.x,y:r.y,kind:'region',rot:r.rot})});
+  WORLD.pois.forEach(p=>{const e=document.createElement('div');e.className='pin poi';e.innerHTML=`<i class="d"></i><span>${p.name}</span>`;pinsEl.append(e);items.push({el:e,x:p.x,y:p.y,kind:'poi'})});
+  LOCS.forEach(l=>{
+    const e=document.createElement('button');e.className='pin loc';e.dataset.id=l.id;e.setAttribute('aria-label',l.name);
+    e.innerHTML=`<span class="ring"></span><span class="dot">${typeof l.id==='number'?l.id:'⚙'}</span><span class="lbl"><b>${l.name}</b><i>${l.sub}</i></span>`;
+    e.addEventListener('click',ev=>{ev.stopPropagation();select(l.id,true)});
+    e.addEventListener('dblclick',ev=>{ev.stopPropagation();travel(l)});
+    pinsEl.append(e);items.push({el:e,x:l.x,y:l.y,kind:'loc',loc:l});
+  });
+  const you=document.createElement('div');you.className='pin you';you.id='you';
+  you.innerHTML=`<svg width="60" height="60" viewBox="-30 -30 60 60"><circle class="acc" r="12" fill="none" stroke="#fff3d6" stroke-width="1.5"/><g id="youRot"><path d="M0 0L-17-32A36 36 0 0 1 17-32Z" fill="rgba(255,243,214,.16)"/><path d="M0-12L8 9L0 4L-8 9Z" fill="#fff3d6" stroke="#1b1408" stroke-width="2" stroke-linejoin="round"/></g></svg><em>YOU</em>`;
+  pinsEl.append(you);items.push({el:you,x:0,y:0,kind:'you'});
+  const rl=document.createElement('div');rl.className='rlabel';rl.id='rlabel';rl.style.display='none';pinsEl.append(rl);
+  syncPins();
+}
+function syncPins(){
+  items.filter(i=>i.kind==='loc').forEach(i=>{
+    const l=i.loc;i.el.classList.toggle('lit',!!l.lit);i.el.classList.toggle('work',l.kind==='work');
+    i.el.classList.toggle('sel',l.id===S.sel);
+  });
+}
+function placePins(){
+  const rel=S.k/fitK;
+  for(const i of items){
+    if(i.kind==='you'){i.x=S.player.x;i.y=S.player.y;$('#youRot').setAttribute('transform',`rotate(${S.player.h})`)}
+    const x=S.tx+i.x*S.k,y=S.ty+i.y*S.k;
+    if(i.kind==='region'){i.el.style.transform=`translate(${x}px,${y}px) translate(-50%,-50%) rotate(${i.rot}deg) scale(${clamp(.7+rel*.3,.8,1.4)})`;i.el.style.opacity=rel>2.4?0:1;continue}
+    i.el.style.transform=`translate(${x}px,${y}px)`;
+    if(i.kind==='poi')i.el.style.display=rel>=1.35?'':'none';
+    if(i.kind==='loc')i.el.classList.toggle('flip',x>vw-210);
+  }
+  placeRoute();
+}
+function placeRoute(){
+  const l=byId(S.sel),line=$('#routeLine'),rl=$('#rlabel');
+  if(!l||S.moving&&false){line.style.display='none';rl.style.display='none';return}
+  const p=S.player,d=Math.hypot(l.x-p.x,l.y-p.y);
+  if(d<6){line.style.display='none';rl.style.display='none';return}
+  line.style.display='';line.setAttribute('x1',p.x);line.setAttribute('y1',p.y);line.setAttribute('x2',l.x);line.setAttribute('y2',l.y);
+  rl.style.display='';rl.textContent=`${fmtDist(d)} · ${walk(d)}`;
+  rl.style.transform=`translate(${S.tx+(p.x+l.x)/2*S.k}px,${S.ty+(p.y+l.y)/2*S.k-22}px) translate(-50%,0)`;
+}
+const fmtDist=d=>{const m=d*WORLD.metersPerUnit;return m>=1000?(m/1000).toFixed(1)+' km':Math.round(m/10)*10+' m'};
+const walk=d=>{const min=d*WORLD.metersPerUnit/1000/5*60;return min<1?'<1 min walk':Math.round(min)+' min walk'};
+
+/* ---------- view (pan / zoom) ---------- */
+function clampView(){S.k=clamp(S.k,minK,minK*6);S.tx=clamp(S.tx,Math.min(0,vw-W*S.k),0);S.ty=clamp(S.ty,Math.min(0,vh-H*S.k),0)}
+function apply(){clampView();world.style.transform=`translate(${S.tx}px,${S.ty}px) scale(${S.k})`;placePins();scaleBar()}
+function viewFor(k,cx,cy){k=clamp(k,minK,minK*6);return{k,tx:clamp(vw/2-cx*k,Math.min(0,vw-W*k),0),ty:clamp(vh/2-cy*k,Math.min(0,vh-H*k),0)}}
+let raf=0;
+function tweenTo(t,ms=550){
+  cancelAnimationFrame(raf);const a={k:S.k,tx:S.tx,ty:S.ty},t0=performance.now();
+  const step=now=>{const p=Math.min(1,(now-t0)/ms),e=1-Math.pow(1-p,3);S.k=a.k+(t.k-a.k)*e;S.tx=a.tx+(t.tx-a.tx)*e;S.ty=a.ty+(t.ty-a.ty)*e;apply();if(p<1)raf=requestAnimationFrame(step)};
+  raf=requestAnimationFrame(step);
+}
+function fitAll(animate){
+  const xs=LOCS.map(l=>l.x),ys=LOCS.map(l=>l.y),pad=130;
+  const x0=Math.min(...xs)-pad,x1=Math.max(...xs)+pad,y0=Math.min(...ys)-pad*.8,y1=Math.max(...ys)+pad*.8;
+  const k=Math.max(minK,Math.min(vw/(x1-x0),vh/(y1-y0)));
+  fitK=k;const v=viewFor(k,(x0+x1)/2,(y0+y1)/2);
+  animate?tweenTo(v):(Object.assign(S,v),apply());
+}
+function zoomAt(f,cx=vw/2,cy=vh/2){
+  const nk=clamp(S.k*f,minK,minK*6),r=nk/S.k;
+  S.tx=cx-(cx-S.tx)*r;S.ty=cy-(cy-S.ty)*r;S.k=nk;apply();
+}
+function scaleBar(){
+  const m=110/S.k*WORLD.metersPerUnit,nice=[50,100,200,250,500,1000,2000,5000].filter(v=>v<=m).pop()||50;
+  const px=nice/WORLD.metersPerUnit*S.k,el=$('#scale');
+  el.querySelector('i').style.width=px+'px';el.querySelector('span').textContent=nice>=1000?nice/1000+' km':nice+' m';
+}
+new ResizeObserver(()=>{
+  vw=wrap.clientWidth;vh=wrap.clientHeight;if(!vw||!vh)return;
+  minK=Math.max(vw/W,vh/H);
+  if(!S.inited){S.inited=true;fitAll(false);focusSel(false)}else apply();
+}).observe(wrap);
+
+/* pointer: drag + pinch + wheel */
+const ptrs=new Map();let dragMoved=0,pinch0=0;
+wrap.addEventListener('pointerdown',e=>{
+  if(e.target.closest('.pin,.card,.zoom,.layers'))return;
+  wrap.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});dragMoved=0;wrap.classList.add('drag');cancelAnimationFrame(raf);
+  if(ptrs.size===2){const[a,b]=[...ptrs.values()];pinch0=Math.hypot(a.x-b.x,a.y-b.y)}
+});
+wrap.addEventListener('pointermove',e=>{
+  const r=wrap.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
+  const wx=(mx-S.tx)/S.k,wy=(my-S.ty)/S.k;
+  if(wx>=0&&wy>=0&&wx<=W&&wy<=H)$('#readout').textContent=`X ${wx|0} · Y ${wy|0} · ${elevAt(wx,wy).toLocaleString()} m`;
+  const p=ptrs.get(e.pointerId);if(!p)return;
+  if(ptrs.size===2){
+    ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});const[a,b]=[...ptrs.values()],d=Math.hypot(a.x-b.x,a.y-b.y);
+    if(pinch0)zoomAt(d/pinch0,(a.x+b.x)/2-r.left,(a.y+b.y)/2-r.top);pinch0=d;return;
+  }
+  S.tx+=e.clientX-p.x;S.ty+=e.clientY-p.y;dragMoved+=Math.abs(e.clientX-p.x)+Math.abs(e.clientY-p.y);
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});apply();
+});
+const endPtr=e=>{ptrs.delete(e.pointerId);if(!ptrs.size)wrap.classList.remove('drag');pinch0=0};
+wrap.addEventListener('pointerup',endPtr);wrap.addEventListener('pointercancel',endPtr);
+wrap.addEventListener('wheel',e=>{e.preventDefault();const r=wrap.getBoundingClientRect();cancelAnimationFrame(raf);zoomAt(Math.exp(-e.deltaY*.0018),e.clientX-r.left,e.clientY-r.top)},{passive:false});
+wrap.addEventListener('click',e=>{if(!e.target.closest('.pin,.card,.zoom,.layers')&&dragMoved<4){}});
+$('#zin').onclick=()=>zoomAt(1.5);$('#zout').onclick=()=>zoomAt(1/1.5);
+$('#zfit').onclick=()=>fitAll(true);
+$('#zme').onclick=()=>tweenTo(viewFor(Math.max(S.k,fitK*1.8),S.player.x,S.player.y));
+
+/* ---------- layers ---------- */
+const LAYER_DEFS=[['contours','Contours'],['roads','Roads'],['labels','Labels'],['poi','Landmarks'],['fog','Fog']];
+function buildLayers(){
+  const el=$('#layers');el.innerHTML='';
+  LAYER_DEFS.forEach(([k,n])=>{const b=document.createElement('button');b.className='chip on';b.textContent=n;b.dataset.k=k;
+    b.onclick=()=>toggleLayer(k);el.append(b)});
+}
+function toggleLayer(k){
+  S.layers[k]=S.layers[k]?0:1;wrap.classList.toggle('no-'+k,!S.layers[k]);
+  $(`#layers [data-k="${k}"]`).classList.toggle('on',!!S.layers[k]);
+}
+
+/* ---------- selection, card, list ---------- */
+function select(id,focus){S.sel=id;syncPins();renderList();renderCard();placeRoute();if(focus)focusSel(true)}
+function focusSel(animate){
+  const l=byId(S.sel);if(!l||!vw)return;
+  const v=viewFor(Math.max(S.k,fitK*1.45),l.x,l.y+30/Math.max(S.k,fitK));
+  animate?tweenTo(v):(Object.assign(S,v),apply());
+}
+function renderCard(){
+  const c=$('#card'),l=byId(S.sel);if(!l){c.hidden=true;return}
+  const d=Math.hypot(l.x-S.player.x,l.y-S.player.y);
+  const status=l.kind==='work'?'Workshop':l.lit?'Signal lit':'Signal dark';
+  c.hidden=false;
+  c.innerHTML=`<button class="cx" aria-label="Dismiss">×</button>
+   <div class="k">${typeof l.id==='number'?'0'+l.id+' · ':''}${status}</div>
+   <h3>${l.name}</h3><p>${l.sub}</p>
+   <div class="stats"><div>DISTANCE<b>${fmtDist(d)}</b></div><div>ON FOOT<b>${walk(d).replace(' walk','')}</b></div><div>ELEVATION<b>${elevAt(l.x,l.y).toLocaleString()} m</b></div></div>
+   <button class="go">Travel here · ↵</button>`;
+  c.querySelector('.go').onclick=()=>travel(l);
+  c.querySelector('.cx').onclick=()=>{S.sel=null;syncPins();renderList();renderCard();placeRoute()};
+}
+function renderList(){
+  const ul=$('#list');
+  ul.innerHTML=LOCS.map(l=>{
+    const d=Math.hypot(l.x-S.player.x,l.y-S.player.y),num=typeof l.id==='number';
+    const st=l.kind==='work'?'':(l.lit?'<span class="st">● LIT</span>':'○ DARK');
+    return `<li class="${l.kind==='work'?'sep':''}"><button class="it${l.id===S.sel?' sel':''}" data-id="${l.id}">
+      <span class="n">${num?'0'+l.id:'⚙'}</span><span class="t"><b>${l.name}</b><i>${l.sub}</i></span>
+      <span class="m">${st}<u>${fmtDist(d)}</u></span><span class="go2" data-go="${l.id}" title="Travel">↗</span></button></li>`}).join('');
+  ul.querySelectorAll('.it').forEach(b=>b.onclick=e=>{
+    const id=isNaN(+b.dataset.id)?b.dataset.id:+b.dataset.id;
+    if(e.target.closest('.go2'))travel(byId(id));else select(id,true)});
+  const n=numbered(),lit=n.filter(l=>l.lit).length;
+  $('#progTxt').textContent=`✳ ${lit} / ${n.length} SIGNALS`;$('#progBar').style.width=lit/n.length*100+'%';
+}
+
+/* ---------- travel ---------- */
+let toastT;
+function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('show'),2200)}
+function travel(l){
+  if(!l||S.moving)return;S.moving=true;
+  const p0={...S.player},dx=l.x-p0.x,dy=l.y-p0.y,d=Math.hypot(dx,dy),hd=Math.atan2(dx,-dy)*180/Math.PI;
+  const dur=clamp(500+d*3,600,2400),t0=performance.now();
+  toast(`Travelling to ${l.name}…`);
+  const step=now=>{
+    const p=Math.min(1,(now-t0)/dur),e=p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+    S.player={x:p0.x+dx*e,y:p0.y+dy*e,h:hd};placePins();drawFog();renderCard();
+    if(p<1)requestAnimationFrame(step);else{S.moving=false;renderList();toast(`Arrived · ${l.name}`);api.onTravel&&api.onTravel(l)}
+  };
+  requestAnimationFrame(step);
+}
+
+/* ---------- open / close / keys ---------- */
+const scrim=$('#scrim');
+function open(){scrim.hidden=false;requestAnimationFrame(()=>{vw=wrap.clientWidth;vh=wrap.clientHeight;if(vw){minK=Math.max(vw/W,vh/H);apply()}})}
+function close(){scrim.hidden=true}
+$('#openBtn').onclick=open;$('#closeBtn').onclick=close;
+scrim.addEventListener('mousedown',e=>{if(e.target===scrim)close()});
+document.addEventListener('keydown',e=>{
+  if(e.target.matches('input,textarea'))return;
+  const k=e.key.toLowerCase();
+  if(k==='m'){scrim.hidden?open():close();return}
+  if(scrim.hidden)return;
+  if(k==='escape')close();
+  else if(k==='+'||k==='=')zoomAt(1.5);
+  else if(k==='-')zoomAt(1/1.5);
+  else if(k==='0')fitAll(true);
+  else if(k==='y')$('#zme').click();
+  else if(k==='f')toggleLayer('fog');
+  else if(k==='c')toggleLayer('contours');
+  else if(k==='enter'){const l=byId(S.sel);if(l){e.preventDefault();travel(l)}}
+  else if(k==='arrowdown'||k==='arrowup'){
+    e.preventDefault();const i=LOCS.findIndex(l=>l.id===S.sel),n=LOCS.length;
+    select(LOCS[(i+(k==='arrowdown'?1:-1)+n)%n].id,true);
+  }
+  else if(/^[1-6]$/.test(k))select(+k,true);
+});
+
+/* ---------- public API (hook these into the 3D game) ---------- */
+window.SignalMap={
+  open,close,
+  setPlayer(x,y,headingDeg){S.player={x,y,h:headingDeg??S.player.h};placePins();drawFog();renderList();renderCard()},
+  setLit(ids){LOCS.forEach(l=>{if(typeof l.id==='number')l.lit=ids.includes(l.id)});buildPins();renderRoads();drawFog();renderList();renderCard()},
+  onTravel(fn){api.onTravel=fn},
+  world:WORLD
+};
+
+/* ---------- boot ---------- */
+drawTerrain();buildSVG();buildLayers();buildPins();drawFog();renderList();renderCard();
+})();
+</script>
+</body>
+</html>
