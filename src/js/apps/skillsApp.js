@@ -198,9 +198,9 @@ export function createSkillsAppContent() {
         <div class="arrival-copy">
           <span class="arrival-eyebrow">SIGNAL RIDGE · A FIELD GUIDE TO THE WORK</span>
           <h1 id="skills-arrival-title">One ridge.<br>Six signals.</h1>
-          <p>The complete skills board is 12 metres ahead. Light the ridge by taking its old roads; each stop reveals real tools and work evidence.</p>
-          <button class="arrival-start" id="skills-start" type="button">DRIVE TO THE BOARD <span aria-hidden="true">↗</span></button>
-          <span class="arrival-controls">WASD DRIVE · A / D STEER · MOUSE DRAG LOOK · WHEEL ZOOM</span>
+          <p>The complete skills board sits in a pull-off beside the trailhead road. Start the journey, park nearby, then press E to browse all six categories.</p>
+          <button class="arrival-start" id="skills-start" type="button">START THE JOURNEY <span aria-hidden="true">↗</span></button>
+          <span class="arrival-controls">WASD DRIVE · E READ THE BOARD WHEN PARKED · MOUSE DRAG LOOK</span>
         </div>
         <aside class="arrival-register" aria-label="Complete skills noticeboard">
           <header>
@@ -1224,14 +1224,28 @@ export function createSkillsAppContent() {
     zoomMap(event.deltaY < 0 ? 0.25 : -0.25);
   }, { passive: false });
 
-  boardButton.addEventListener('click', () => {
-    if (!started) return;
-    const open = arrivalPanel.hidden;
+  const openSkillsBoard = () => {
+    if (!started || !arrivalPanel.hidden) return;
+    closeDiscovery();
     mapPanel.hidden = true;
     mapButton.setAttribute('aria-expanded', 'false');
-    arrivalPanel.hidden = !open;
-    boardButton.setAttribute('aria-expanded', String(open));
-    world?.setPaused(open || !controlsPanel.hidden);
+    controlsPanel.hidden = true;
+    controlsButton.setAttribute('aria-expanded', 'false');
+    arrivalPanel.hidden = false;
+    boardButton.setAttribute('aria-expanded', 'true');
+    world?.setPaused(true);
+    boardTabs.querySelector('[aria-selected="true"]')?.focus();
+  };
+
+  boardButton.addEventListener('click', () => {
+    if (!started) return;
+    if (arrivalPanel.hidden) {
+      openSkillsBoard();
+      return;
+    }
+    arrivalPanel.hidden = true;
+    boardButton.setAttribute('aria-expanded', 'false');
+    world?.setPaused(!controlsPanel.hidden);
   });
 
   mapButton.addEventListener('click', () => {
@@ -1369,6 +1383,7 @@ export function createSkillsAppContent() {
           nearbyBeaconId,
           nearbySecretId,
           nearbySettlementTopic,
+          nearSkillsBoard,
           settlementTopicCount,
           settlementTopicTotal,
           lowRange,
@@ -1431,7 +1446,11 @@ export function createSkillsAppContent() {
                 ? `HIDDEN PLACE · STOP AND PRESS E · ${FIELD_SECRET_NOTES[nearbySecretId]?.title.toUpperCase()}`
                 : nearbySettlementTopic
                   ? `ASHEN SETTLEMENT · STOP AND PRESS E · ${nearbySettlementTopic.title.toUpperCase()}`
-                  : nearbyBeaconId === 'settlement'
+                  : nearSkillsBoard
+                    ? speed > 8
+                      ? 'TRAILHEAD BOARD · STOP THE CAR TO BROWSE SIX SKILLS'
+                      : 'TRAILHEAD BOARD · PRESS E TO BROWSE SIX SKILLS'
+                    : nearbyBeaconId === 'settlement'
                     && settlementTopicCount < settlementTopicTotal
                     ? `SETTLEMENT SIGNAL SEALED · LIGHT THE HOUSE LAMPS ${settlementTopicCount}/${settlementTopicTotal}`
               : nearbyBeaconId && !litSignalIds.has(nearbyBeaconId)
@@ -1504,7 +1523,8 @@ export function createSkillsAppContent() {
           showSettlementTopic(topic);
         },
         SETTLEMENT_TOPICS,
-        savedSettlementTopics
+        savedSettlementTopics,
+        openSkillsBoard
       );
 
       canvas._world = world;

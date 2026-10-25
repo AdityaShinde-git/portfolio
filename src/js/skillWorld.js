@@ -86,7 +86,8 @@ export class SkillWorld {
     initialSecrets = [],
     onSettlementTopic = null,
     settlementTopicDefinitions = [],
-    initialSettlementTopics = []
+    initialSettlementTopics = [],
+    onSkillsBoardInteract = null
   ) {
     this.canvas = canvas;
     this.onDiscoverDestination = onDiscoverDestination;
@@ -95,6 +96,7 @@ export class SkillWorld {
     this.onSignalChange = onSignalChange;
     this.onSecretDiscovery = onSecretDiscovery;
     this.onSettlementTopic = onSettlementTopic;
+    this.onSkillsBoardInteract = onSkillsBoardInteract;
     this.settlementTopicDefinitions = settlementTopicDefinitions;
     this.litSettlementTopicIds = new Set(initialSettlementTopics);
     this.settlementTopics = [];
@@ -778,24 +780,63 @@ export class SkillWorld {
       );
       return THREE.MathUtils.lerp(top, bottom, tz);
     };
+    const settlementHeight = sampleGrid(smoothedHeights, SETTLEMENT.x, SETTLEMENT.z);
+    const roadJunctionHeights = new Map();
+    const roadJunctionKey = point => `${Math.round(point.x * 10)}:${Math.round(point.z * 10)}`;
     const roadGroups = this.roadCurves.map((curve, index) => {
       const definition = ROAD_DEFINITIONS[index];
       const sampleCount = Math.max(12, Math.ceil(curve.getLength() / 3));
       const samples = curve.getSpacedPoints(sampleCount);
       samples.forEach(point => { point.y = sampleGrid(smoothedHeights, point.x, point.z); });
-      for (let pass = 0; pass < 2; pass += 1) {
-        for (let sample = 1; sample < samples.length; sample += 1) {
-          const previous = samples[sample - 1];
-          const current = samples[sample];
-          const maxRise = Math.hypot(current.x - previous.x, current.z - previous.z) * 0.095;
-          current.y = THREE.MathUtils.clamp(current.y, previous.y - maxRise, previous.y + maxRise);
+      const startKey = roadJunctionKey(samples[0]);
+      const endKey = roadJunctionKey(samples[samples.length - 1]);
+      const startsAtSettlement = Math.hypot(
+        samples[0].x - SETTLEMENT.x,
+        samples[0].z - SETTLEMENT.z
+      ) < 12;
+      const endsAtSettlement = Math.hypot(
+        samples[samples.length - 1].x - SETTLEMENT.x,
+        samples[samples.length - 1].z - SETTLEMENT.z
+      ) < 12;
+      if (definition.from === 'settlement-loop') {
+        samples.forEach(point => { point.y = settlementHeight; });
+      } else {
+        const startAnchor = startsAtSettlement
+          ? settlementHeight
+          : roadJunctionHeights.get(startKey);
+        const endAnchor = endsAtSettlement
+          ? settlementHeight
+          : roadJunctionHeights.get(endKey);
+        const hasStartAnchor = startAnchor !== undefined;
+        const hasEndAnchor = endAnchor !== undefined;
+        if (hasStartAnchor) samples[0].y = startAnchor;
+        if (hasEndAnchor) samples[samples.length - 1].y = endAnchor;
+        for (let pass = 0; pass < (hasStartAnchor || hasEndAnchor ? 3 : 2); pass += 1) {
+          for (let sample = 1; sample < samples.length; sample += 1) {
+            if (sample === samples.length - 1 && hasEndAnchor) continue;
+            const previous = samples[sample - 1];
+            const current = samples[sample];
+            const maxRise = Math.hypot(current.x - previous.x, current.z - previous.z) * 0.095;
+            current.y = THREE.MathUtils.clamp(current.y, previous.y - maxRise, previous.y + maxRise);
+          }
+          for (let sample = samples.length - 2; sample >= 0; sample -= 1) {
+            if (sample === 0 && hasStartAnchor) continue;
+            const next = samples[sample + 1];
+            const current = samples[sample];
+            const maxRise = Math.hypot(next.x - current.x, next.z - current.z) * 0.095;
+            current.y = THREE.MathUtils.clamp(current.y, next.y - maxRise, next.y + maxRise);
+          }
         }
-        for (let sample = samples.length - 2; sample >= 0; sample -= 1) {
-          const next = samples[sample + 1];
-          const current = samples[sample];
-          const maxRise = Math.hypot(next.x - current.x, next.z - current.z) * 0.095;
-          current.y = THREE.MathUtils.clamp(current.y, next.y - maxRise, next.y + maxRise);
-        }
+        if (hasStartAnchor) samples[0].y = startAnchor;
+        if (hasEndAnchor) samples[samples.length - 1].y = endAnchor;
+      }
+      if (startsAtSettlement) roadJunctionHeights.set(startKey, settlementHeight);
+      else if (!roadJunctionHeights.has(startKey)) {
+        roadJunctionHeights.set(startKey, samples[0].y);
+      }
+      if (endsAtSettlement) roadJunctionHeights.set(endKey, settlementHeight);
+      else if (!roadJunctionHeights.has(endKey)) {
+        roadJunctionHeights.set(endKey, samples[samples.length - 1].y);
       }
       return { samples, closed: definition.closed ?? false };
     });
@@ -850,24 +891,26 @@ export class SkillWorld {
       return nearest;
     };
     this.sampleRoadSurface = sampleRoadSurface;
-    const roadHeightAt = (x, z, baseHeight) => {
-      const nearest = sampleRoadSurface(x, z, 48);
-      const influence = nearest ? 1 - THREE.MathUtils.smoothstep(nearest.distance, 8, 42) : 0;
-      return THREE.MathUtils.lerp(baseHeight, nearest?.height ?? baseHeight, influence);
-    };
     const finalHeights = new Float32Array(smoothedHeights.length);
     const riverDistances = new Float32Array(smoothedHeights.length);
-    const settlementHeight = sampleGrid(smoothedHeights, SETTLEMENT.x, SETTLEMENT.z);
     for (let xIndex = 0; xIndex <= terrainSegmentsX; xIndex += 1) {
       const x = -WORLD_WIDTH / 2 + xIndex * terrainStep;
       for (let zIndex = 0; zIndex <= terrainSegmentsZ; zIndex += 1) {
         const z = WORLD_DEPTH / 2 - zIndex * terrainStep;
         const index = terrainIndex(xIndex, zIndex);
         const baseHeight = smoothedHeights[index];
-        const roadHeight = roadHeightAt(x, z, baseHeight);
         const settlementDistance = Math.hypot(x - SETTLEMENT.x, z - SETTLEMENT.z);
-        const settlementBlend = 1 - THREE.MathUtils.smoothstep(settlementDistance, 34, 108);
-        const gradedHeight = THREE.MathUtils.lerp(roadHeight, settlementHeight, settlementBlend);
+        const settlementBlend = 1 - THREE.MathUtils.smoothstep(settlementDistance, 34, 160);
+        const settledHeight = THREE.MathUtils.lerp(baseHeight, settlementHeight, settlementBlend);
+        const nearestRoad = sampleRoadSurface(x, z, 48);
+        const roadInfluence = nearestRoad
+          ? 1 - THREE.MathUtils.smoothstep(nearestRoad.distance, 20, 48)
+          : 0;
+        const gradedHeight = THREE.MathUtils.lerp(
+          settledHeight,
+          nearestRoad?.height ?? settledHeight,
+          roadInfluence
+        );
         const river = nearestRiverSample(x, z);
         const channel = 1 - THREE.MathUtils.smoothstep(river.distance, 8, 52);
         finalHeights[index] = gradedHeight - channel * 3.4;
@@ -1990,9 +2033,14 @@ export class SkillWorld {
 
   _buildSkillsNoticeboard() {
     const board = new THREE.Group();
-    board.position.set(TRAILHEAD.x, this.terrainHeight(TRAILHEAD.x, TRAILHEAD.z), TRAILHEAD.z);
+    const shoulderOffset = 17;
+    const boardX = TRAILHEAD.x - Math.cos(TRAILHEAD_HEADING) * shoulderOffset;
+    const boardZ = TRAILHEAD.z + Math.sin(TRAILHEAD_HEADING) * shoulderOffset;
+    const boardY = this.terrainHeight(boardX, boardZ);
+    board.position.set(boardX, boardY, boardZ);
     board.rotation.y = TRAILHEAD_HEADING;
     this.scene.add(board);
+    this.skillsBoardPosition = new THREE.Vector3(boardX, boardY, boardZ);
 
     const timber = new THREE.MeshStandardMaterial({ color: 0x514338, roughness: 0.9 });
     const bronze = new THREE.MeshStandardMaterial({
@@ -2000,6 +2048,32 @@ export class SkillWorld {
       roughness: 0.5,
       metalness: 0.48
     });
+    const padSize = 18;
+    const padDepth = 12;
+    const padCorners = [
+      [-padSize / 2, -padDepth / 2],
+      [padSize / 2, -padDepth / 2],
+      [padSize / 2, padDepth / 2],
+      [-padSize / 2, padDepth / 2]
+    ];
+    const padPositions = padCorners.flatMap(([localX, localZ]) => {
+      const worldX = boardX + Math.cos(TRAILHEAD_HEADING) * localX
+        + Math.sin(TRAILHEAD_HEADING) * localZ;
+      const worldZ = boardZ - Math.sin(TRAILHEAD_HEADING) * localX
+        + Math.cos(TRAILHEAD_HEADING) * localZ;
+      return [localX, this.terrainHeight(worldX, worldZ) - boardY + 0.035, localZ];
+    });
+    const padGeometry = new THREE.BufferGeometry();
+    padGeometry.setAttribute('position', new THREE.Float32BufferAttribute(padPositions, 3));
+    padGeometry.setIndex([0, 2, 1, 0, 3, 2]);
+    padGeometry.computeVertexNormals();
+    const pullOff = new THREE.Mesh(
+      padGeometry,
+      new THREE.MeshStandardMaterial({ color: 0x5b5548, roughness: 0.98, flatShading: true })
+    );
+    pullOff.receiveShadow = true;
+    board.add(pullOff);
+
     const plinth = new THREE.Mesh(new THREE.BoxGeometry(11.4, 0.5, 2.6), timber);
     plinth.position.y = 0.25;
     plinth.castShadow = true;
@@ -2033,7 +2107,7 @@ export class SkillWorld {
     context.fillText('FIELD SKILLS  /  ADITYA SHINDE', 54, 66);
     context.font = '24px monospace';
     context.fillStyle = '#c2b69a';
-    context.fillText('A COMPLETE INVENTORY · SELECT A CATEGORY IN THE FIELD GUIDE', 56, 116);
+    context.fillText('PARK BESIDE THE ROAD · STOP AND PRESS E TO BROWSE ALL SIX CATEGORIES', 56, 116);
 
     const categories = [
       ['LANGUAGES', resumeData.skills.languages],
@@ -2415,6 +2489,18 @@ export class SkillWorld {
       litCount: this.litSettlementTopicIds.size,
       total: this.settlementTopics.length
     });
+    return true;
+  }
+
+  interactWithNearbySkillsBoard() {
+    if (!this.skillsBoardPosition || !this.onSkillsBoardInteract) return false;
+    const distance = Math.hypot(
+      this.carBody.position.x - this.skillsBoardPosition.x,
+      this.carBody.position.z - this.skillsBoardPosition.z
+    );
+    if (distance > 22) return false;
+    if (Math.hypot(this.carBody.velocity.x, this.carBody.velocity.z) > 2.2) return true;
+    this.onSkillsBoardInteract();
     return true;
   }
 
@@ -3810,6 +3896,7 @@ export class SkillWorld {
         break;
       case 'KeyE':
         if (!e.repeat && !this.interactWithNearbySettlementTopic()
+          && !this.interactWithNearbySkillsBoard()
           && !this.interactWithNearbyBeacon()
           && !this.interactWithNearbySecret()) this.enterGarage();
         break;
@@ -3888,37 +3975,27 @@ export class SkillWorld {
   travelToDestination(destinationId) {
     const destination = this.destinations.find(item => item.id === destinationId);
     if (!destination || this.disposed) return false;
+    const landing = this.sampleRoadSurface(destination.x, destination.z, 24);
+    if (!landing) return false;
     if (this.garageOpen) this.exitGarage();
     this._clearControls();
     this.autoDriveTarget = null;
     this.stopRally();
     this.destinationId = destination.id;
-    this.carBody.position.set(destination.x, 0, destination.z);
+    this.carBody.position.set(landing.x, 0, landing.z);
     this._syncVehicleToTerrain();
-    let nearestCurve = null;
-    let nearestProgress = 0;
-    let nearestDistance = Infinity;
-    this.roadCurves.forEach(curve => {
-      for (let step = 0; step <= 32; step += 1) {
-        const progress = step / 32;
-        const point = curve.getPointAt(progress);
-        const distance = Math.hypot(point.x - destination.x, point.z - destination.z);
-        if (distance < nearestDistance) {
-          nearestCurve = curve;
-          nearestProgress = progress;
-          nearestDistance = distance;
-        }
-      }
-    });
-    const tangent = nearestCurve?.getTangentAt(nearestProgress);
-    this.driveYaw = tangent ? Math.atan2(tangent.x, tangent.z) : TRAILHEAD_HEADING;
+    this.driveYaw = Math.atan2(landing.directionX, landing.directionZ);
     this.carBody.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), this.driveYaw);
     this.carBody.velocity.set(0, 0, 0);
     this.carBody.angularVelocity.set(0, 0, 0);
     this.carBody.aabbNeedsUpdate = true;
     this.carBody.wakeUp();
     this.vehicleSpeed = 0;
-    this.camera.position.set(destination.x - Math.sin(this.driveYaw) * 9, this.carBody.position.y + 7, destination.z - Math.cos(this.driveYaw) * 9);
+    this.camera.position.set(
+      landing.x - Math.sin(this.driveYaw) * 9,
+      this.carBody.position.y + 7,
+      landing.z - Math.cos(this.driveYaw) * 9
+    );
     this.carGroup.position.copy(this.carBody.position);
     this.carGroup.quaternion.copy(this.carBody.quaternion);
     this.carVisual.rotation.set(0, 0, 0);
@@ -4597,14 +4674,19 @@ export class SkillWorld {
     if (this.rallyActive && !this.trackComplete && this.checkpoints[this.checkpointIndex]) {
       this.checkpoints.forEach((checkpoint, index) => {
         const active = index === this.checkpointIndex;
-        checkpoint.visible = active;
+        const target = checkpoint.userData.position;
+        const distance = Math.hypot(
+          this.carGroup.position.x - target.x,
+          this.carGroup.position.z - target.z
+        );
+        checkpoint.visible = active && distance <= (checkpoint.visible ? 84 : 70);
         const ring = checkpoint.userData.ring;
         ring.material.emissiveIntensity = THREE.MathUtils.lerp(
           ring.material.emissiveIntensity,
-          active ? 2.6 : 0.65,
+          active && checkpoint.visible ? 2.6 : 0.65,
           1 - Math.exp(-4 * dt)
         );
-        if (active) ring.scale.setScalar(1 + Math.sin(now * 0.003) * 0.045);
+        if (active && checkpoint.visible) ring.scale.setScalar(1 + Math.sin(now * 0.003) * 0.045);
       });
 
       const target = this.checkpoints[this.checkpointIndex].userData.position;
@@ -4613,6 +4695,7 @@ export class SkillWorld {
         this.checkpointIndex++;
         this.trackComplete = this.checkpointIndex === this.checkpoints.length;
         if (this.trackComplete) {
+          this.checkpoints.forEach(checkpoint => { checkpoint.visible = false; });
           if (!this.rallyBestMs || this.rallyElapsedMs < this.rallyBestMs) {
             this.rallyBestMs = this.rallyElapsedMs;
             try {
@@ -4650,6 +4733,11 @@ export class SkillWorld {
       const drifting = this.keys.brake && Math.abs(this.vehicleSpeed) > 4;
       const nextCheckpoint = this.checkpoints[Math.min(this.checkpointIndex, this.checkpoints.length - 1)];
       const destination = this.destinations.find(item => item.id === this.destinationId);
+      const nearSkillsBoard = this.skillsBoardPosition
+        && Math.hypot(
+          this.carBody.position.x - this.skillsBoardPosition.x,
+          this.carBody.position.z - this.skillsBoardPosition.z
+        ) <= 22;
       const garageTarget = this.destinationId === 'garage';
       const routeTarget = garageTarget
         ? this.garageEntry
@@ -4686,6 +4774,7 @@ export class SkillWorld {
         nearbySettlementTopic: this.nearbySettlementTopic
           ? { id: this.nearbySettlementTopic.id, title: this.nearbySettlementTopic.title }
           : null,
+        nearSkillsBoard: Boolean(nearSkillsBoard),
         settlementTopicCount: this.litSettlementTopicIds.size,
         settlementTopicTotal: this.settlementTopics.length,
         signalCount: this.litBeacons.size,

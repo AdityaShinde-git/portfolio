@@ -101,18 +101,6 @@ export function createProjectsAppContent(initialProjectId = '') {
       </div>
       <div class="at-walk-vignette" aria-hidden="true"></div>
 
-      <header class="at-walk-header">
-        <a class="at-walk-brand" href="#home" data-portfolio-route="home" aria-label="Back to desktop">
-          <span>AS</span><small>ADITYA SHINDE</small>
-        </a>
-        <nav class="at-walk-nav" aria-label="Portfolio navigation">
-          <a class="is-current" href="#work" data-portfolio-route="projects">WORK</a>
-          <a href="#skills" data-portfolio-route="skills">SKILLS</a>
-          <a href="#contact" data-portfolio-route="contact">CONTACT ↗</a>
-        </nav>
-        <a class="experience-back-link" href="#home" data-portfolio-route="home">← BACK TO DESKTOP</a>
-      </header>
-
       <main class="at-walk-scroll" aria-label="Selected work">
         <section class="walk-intro">
           <div class="walk-intro-index"><span>SELECTED ENGINEERING</span><span>CASE STUDIES · 02</span></div>
@@ -140,7 +128,6 @@ export function createProjectsAppContent(initialProjectId = '') {
           <p class="walk-eyebrow">END OF THE PATH</p>
           <h2>More good work<br>starts with a conversation.</h2>
           <a href="#contact" data-portfolio-route="contact">GET IN TOUCH <span>↗</span></a>
-          <a class="walk-outro-home" href="#home" data-portfolio-route="home">← BACK TO DESKTOP</a>
         </section>
       </main>
 

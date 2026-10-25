@@ -9007,6 +9007,13 @@ body[data-reduced-motion="true"] *::after {
   animation: immersiveSceneEnter 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
+#os-desktop.immersive-experience-active > .os-dock-container {
+  position: fixed;
+  z-index: 12000;
+  visibility: visible;
+  pointer-events: auto;
+}
+
 .portfolio-immersive-workspace .window-header,
 .portfolio-immersive-workspace .window-resize-handle {
   display: none;
