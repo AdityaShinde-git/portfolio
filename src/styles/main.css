@@ -9014,6 +9014,11 @@ body[data-reduced-motion="true"] *::after {
   pointer-events: auto;
 }
 
+#os-desktop.skills-experience-active > .os-dock-container {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .portfolio-immersive-workspace .window-header,
 .portfolio-immersive-workspace .window-resize-handle {
   display: none;
@@ -10973,14 +10978,200 @@ canvas[hidden],
   }
 }
 
+.bruno-proximity-prompt {
+  position: absolute;
+  right: 50%;
+  bottom: 42px;
+  z-index: 4;
+  display: block;
+  width: min(500px, calc(100% - 32px));
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #eee5d4;
+  font-family: var(--font-main);
+  pointer-events: none;
+  text-align: center;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
+  transform: translateX(50%);
+  transition: opacity 220ms ease, transform 220ms ease, visibility 220ms ease;
+}
+
+.bruno-proximity-prompt.is-hidden {
+  opacity: 0;
+  transform: translate(50%, 8px);
+}
+
+.city-story-dialog {
+  position: absolute;
+  z-index: 12;
+  right: 50%;
+  bottom: 100px;
+  display: grid;
+  width: min(680px, calc(100% - 32px));
+  padding: 18px 24px 12px;
+  color: #f1e8d5;
+  pointer-events: none;
+  text-align: center;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.95);
+  transform: translateX(50%);
+}
+
+.city-story-dialog[hidden] {
+  display: none !important;
+}
+
+.skills-experience:has(.city-story-dialog:not([hidden])) .bruno-proximity-prompt {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.city-story-line {
+  animation: cityStoryRise 320ms ease both;
+}
+
+.city-story-eyebrow {
+  color: #f0c77e;
+  font: 600 0.62rem/1.5 var(--font-code);
+  letter-spacing: 0.17em;
+}
+
+.city-story-line h2 {
+  margin: 7px 0 5px;
+  font-family: var(--font-display, Georgia, serif);
+  font-size: clamp(1.1rem, 2.4vw, 1.55rem);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+}
+
+.city-story-copy {
+  max-width: 62ch;
+  margin: 0 auto;
+  color: rgba(250, 243, 229, 0.94);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.city-story-dismiss {
+  min-height: 32px;
+  margin-top: 8px;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  color: #f0d39a;
+  font: 500 0.65rem/1.45 var(--font-code);
+  pointer-events: auto;
+  cursor: pointer;
+  text-shadow: inherit;
+}
+
+@keyframes cityStoryRise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.prox-card__mark {
+  display: none;
+}
+
+.prox-card__body {
+  min-width: 0;
+}
+
+.prox-card__eyebrow {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10px;
+}
+
+.prox-card__tag {
+  overflow: hidden;
+  color: #d7b27c;
+  font: 600 0.62rem/1.35 var(--font-code);
+  letter-spacing: 0.12em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.prox-card__dist {
+  margin-left: 0;
+  color: rgba(238, 229, 212, 0.64);
+  font: 0.62rem/1 var(--font-code);
+  white-space: nowrap;
+}
+
+.prox-card__title {
+  margin-top: 3px;
+  color: #f0e9db;
+  font: 500 1.02rem/1.2 Georgia, serif;
+}
+
+.prox-card__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 5px;
+  color: rgba(227, 216, 194, 0.72);
+  font: 0.6rem/1.4 var(--font-code);
+  letter-spacing: 0.02em;
+}
+
+.prox-card__key {
+  display: inline-grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 1px solid rgba(215, 178, 124, 0.62);
+  border-radius: 2px;
+  color: #efd6ab;
+  font: inherit;
+}
+
+.bruno-world-prompt {
+  position: absolute;
+  z-index: 4;
+  padding: 9px 13px;
+  border: 1px solid rgba(212, 160, 74, 0.72);
+  border-radius: 6px;
+  background: rgba(12, 18, 22, 0.88);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.28);
+  color: #ffd580;
+  font: 700 0.65rem/1.2 var(--font-code);
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translate(-50%, -100%);
+}
+
+.bruno-world-prompt[hidden] {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .bruno-proximity-prompt {
+    right: 50%;
+    bottom: 140px;
+    width: calc(100% - 24px);
+  }
+
+  .city-story-dialog {
+    bottom: 180px;
+    width: calc(100% - 24px);
+    padding: 12px 8px;
+  }
+}
+
 /* Signal Ridge: keep the driving scene primary and reveal portfolio UI on intent. */
 .bruno-canvas {
   z-index: 1;
 }
 
-.skills-experience.is-intro .bruno-objective,
-.skills-experience.is-intro .bruno-speed,
-.skills-experience.is-intro .bruno-touch-controls {
+.skills-experience.is-board-open .bruno-objective,
+.skills-experience.is-board-open .bruno-speed,
+.skills-experience.is-board-open .bruno-touch-controls {
   display: none;
 }
 
@@ -11074,8 +11265,8 @@ canvas[hidden],
   gap: clamp(28px, 5vw, 76px);
   padding: clamp(72px, 9vh, 112px) clamp(24px, 5vw, 76px) clamp(32px, 6vh, 70px);
   background:
-    linear-gradient(90deg, rgba(10, 14, 16, 0.68), rgba(10, 14, 16, 0.3) 44%, rgba(10, 14, 16, 0.08) 100%),
-    linear-gradient(0deg, rgba(10, 14, 16, 0.42), transparent 38%);
+    linear-gradient(90deg, rgba(8, 12, 10, 0.86), rgba(8, 12, 10, 0.55) 43%, rgba(8, 12, 10, 0.12) 100%),
+    linear-gradient(0deg, rgba(8, 12, 10, 0.35), transparent 42%);
   animation: ridgeArrival 650ms ease both;
 }
 
@@ -11151,30 +11342,31 @@ canvas[hidden],
 .arrival-register {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto auto;
-  width: min(540px, 44vw);
+  width: min(590px, 48vw);
   max-height: min(74vh, 760px);
-  flex: 0 1 540px;
+  flex: 0 1 590px;
   overflow: hidden;
-  padding: clamp(12px, 1.5vw, 20px) 0 clamp(12px, 1.5vw, 20px) clamp(17px, 2vw, 26px);
-  border: 0;
-  border-left: 1px solid rgba(206, 190, 158, 0.55);
+  padding: clamp(18px, 2.2vw, 28px);
+  border: 1px solid rgba(73, 58, 39, 0.36);
+  border-top: 4px solid #98724c;
   background:
-    linear-gradient(90deg, rgba(25, 29, 25, 0.74), rgba(25, 29, 25, 0.38));
+    repeating-linear-gradient(0deg, rgba(94, 72, 43, 0.035) 0 1px, transparent 1px 5px),
+    linear-gradient(135deg, #eee4cf, #ddceb0);
   box-shadow: -20px 0 70px rgba(0, 0, 0, 0.22);
-  color: #e8dfc9;
+  color: #302d26;
 }
 
 .arrival-register header {
   display: grid;
   gap: 9px;
   padding-bottom: 15px;
-  border-bottom: 1px solid rgba(222, 207, 175, 0.28);
+  border-bottom: 1px solid rgba(73, 58, 39, 0.25);
 }
 
 .arrival-register header > span,
 .arrival-register footer {
-  color: rgba(229, 213, 180, 0.66);
-  font: 0.52rem/1.5 var(--font-code);
+  color: rgba(63, 53, 39, 0.7);
+  font: 0.6rem/1.5 var(--font-code);
   letter-spacing: 0.12em;
 }
 
@@ -11183,14 +11375,14 @@ canvas[hidden],
   justify-content: space-between;
   align-items: baseline;
   gap: 10px;
-  color: #efe7d5;
-  font: 500 clamp(1.2rem, 1.9vw, 1.65rem)/1.1 Georgia, serif;
+  color: #302a22;
+  font: 500 clamp(1.35rem, 2.1vw, 1.8rem)/1.1 Georgia, serif;
   letter-spacing: 0.02em;
 }
 
 .arrival-register header i {
-  color: #c3a77d;
-  font: normal 0.5rem/1.4 var(--font-code);
+  color: #765d3b;
+  font: normal 0.56rem/1.4 var(--font-code);
   letter-spacing: 0.1em;
 }
 
@@ -11295,10 +11487,71 @@ canvas[hidden],
 }
 
 .skills-register-evidence p {
+  color: #4a4337;
+  font-size: 0.78rem;
+  line-height: 1.65;
+}
+
+.skills-register-tabs {
+  scrollbar-width: none;
+  scroll-snap-type: x mandatory;
+}
+
+.skills-register-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.skills-register-tabs [role="tab"] {
+  scroll-snap-align: start;
+}
+
+.skills-register-grid {
+  touch-action: pan-y;
+  scrollbar-width: none;
+}
+
+.skills-register-grid::-webkit-scrollbar {
+  display: none;
+}
+
+.skills-register-controls > button {
+  width: 40px;
+  height: 38px;
+  border-color: rgba(73, 58, 39, 0.28);
+  background: rgba(255, 251, 239, 0.55);
+  color: #3f3528;
+}
+
+.skills-register-progress {
+  color: #725937;
+  font-size: 0.56rem;
+}
+
+.skills-register-track {
+  background: rgba(73, 58, 39, 0.2);
+}
+
+.skills-register-track i {
+  background: #9b7549;
+}
+
+.skills-register-explore {
+  border-color: rgba(112, 80, 43, 0.55);
+  background: rgba(153, 113, 63, 0.12);
+  color: #4a3825;
+  font-size: 0.58rem;
+}
+
+.skills-register-explore:hover,
+.skills-register-explore:focus-visible {
+  background: rgba(153, 113, 63, 0.24);
+  outline: 2px solid rgba(112, 80, 43, 0.6);
+  outline-offset: 2px;
+}
+
+.skills-register-evidence p {
   margin-top: 8px;
-  color: rgba(232, 223, 201, 0.7);
-  font-size: 0.68rem;
-  line-height: 1.55;
+  max-width: 48ch;
 }
 
 .skills-register-tabs {
@@ -11314,20 +11567,20 @@ canvas[hidden],
   display: block;
   flex: 0 0 auto;
   padding: 8px 10px;
-  border: 1px solid rgba(222, 207, 175, 0.18);
-  border-radius: 3px;
-  background: rgba(12, 17, 15, 0.3);
-  color: rgba(232, 223, 201, 0.62);
-  font: 0.48rem/1.2 var(--font-code);
+  border: 1px solid rgba(73, 58, 39, 0.26);
+  border-radius: 2px;
+  background: rgba(255, 250, 239, 0.4);
+  color: rgba(54, 46, 34, 0.78);
+  font: 0.58rem/1.2 var(--font-code);
   letter-spacing: 0.04em;
   white-space: nowrap;
   cursor: pointer;
 }
 
 .arrival-register .skills-register-tabs button[aria-selected="true"] {
-  border-color: rgba(215, 183, 128, 0.72);
-  background: rgba(194, 164, 117, 0.16);
-  color: #fff0d2;
+  border-color: #876744;
+  background: #8d6a43;
+  color: #fff7e8;
 }
 
 .skills-register-grid {
@@ -11339,11 +11592,11 @@ canvas[hidden],
 
 .skills-register-group {
   min-height: 240px;
-  padding: clamp(14px, 2vw, 24px);
-  border: 1px solid rgba(222, 207, 175, 0.2);
+  padding: clamp(16px, 2vw, 24px);
+  border: 1px solid rgba(73, 58, 39, 0.24);
   background:
-    radial-gradient(ellipse at 100% 0, rgba(190, 158, 108, 0.1), transparent 58%),
-    rgba(14, 19, 17, 0.4);
+    radial-gradient(ellipse at 100% 0, rgba(145, 110, 63, 0.1), transparent 58%),
+    rgba(255, 251, 240, 0.52);
 }
 
 .skills-register-group[hidden] {
@@ -11351,14 +11604,15 @@ canvas[hidden],
 }
 
 .skills-register-chapter {
-  color: #c3a77d;
-  font: 0.5rem/1.4 var(--font-code);
+  color: #806442;
+  font: 0.58rem/1.4 var(--font-code);
   letter-spacing: 0.13em;
 }
 
 .skills-register-group h3 {
   margin: 12px 0 16px;
-  font: 500 clamp(1.5rem, 2.4vw, 2.25rem)/1.05 Georgia, serif;
+  color: #302a22;
+  font: 500 clamp(1.75rem, 2.7vw, 2.45rem)/1.05 Georgia, serif;
 }
 
 .skills-register-list {
@@ -11367,11 +11621,11 @@ canvas[hidden],
 
 .skills-register-list span {
   padding: 7px 9px;
-  border: 1px solid rgba(222, 207, 175, 0.15);
+  border: 1px solid rgba(73, 58, 39, 0.2);
   border-radius: 2px;
-  background: rgba(237, 224, 194, 0.045);
-  color: rgba(239, 230, 211, 0.86);
-  font-size: 0.55rem;
+  background: rgba(255, 252, 244, 0.76);
+  color: #3d352a;
+  font-size: 0.68rem;
 }
 
 .skills-register-evidence {
@@ -11380,7 +11634,8 @@ canvas[hidden],
 
 .skills-register-evidence summary {
   padding: 10px 0;
-  font-size: 0.52rem;
+  color: #725937;
+  font-size: 0.59rem;
 }
 
 .skills-register-explore {
@@ -11448,7 +11703,7 @@ canvas[hidden],
 .arrival-register footer {
   display: block;
   padding-top: 3px;
-  font-size: 0.46rem;
+  font-size: 0.53rem;
 }
 
 .bruno-actions kbd {
@@ -11466,7 +11721,7 @@ canvas[hidden],
   width: min(920px, calc(100% - 48px));
   max-height: min(88vh, 760px);
   gap: 20px;
-  overflow: hidden;
+  overflow: auto;
   padding: clamp(20px, 3vw, 32px);
   border: 1px solid rgba(214, 192, 154, 0.25);
   border-radius: 4px;
@@ -11520,6 +11775,183 @@ canvas[hidden],
   background:
     radial-gradient(ellipse at 50% 50%, rgba(99, 120, 95, 0.16), transparent 62%),
     #161d18;
+}
+
+.settlement-plan-map {
+  width: 100%;
+  max-height: min(47vh, 360px);
+  aspect-ratio: 1.4;
+  border: 1px solid rgba(214, 192, 154, 0.18);
+  background: #182019;
+}
+
+.signal-map[hidden],
+.settlement-plan-map[hidden] {
+  display: none !important;
+}
+
+.map-mode-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.map-mode-controls button {
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid rgba(214, 192, 154, 0.2);
+  background: rgba(25, 32, 26, 0.9);
+  color: rgba(238, 234, 222, 0.62);
+  font: 0.48rem/1.2 var(--font-code);
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.map-mode-controls button[aria-pressed="true"] {
+  border-color: rgba(211, 163, 107, 0.72);
+  background: rgba(94, 65, 40, 0.48);
+  color: #f0d7ae;
+}
+
+.settlement-plan-background {
+  fill: #1b241d;
+}
+
+.settlement-plan-contour {
+  fill: none;
+  stroke: rgba(200, 202, 164, 0.12);
+  stroke-width: 1;
+}
+
+.settlement-plan-plaza {
+  fill: rgba(172, 142, 100, 0.2);
+  stroke: rgba(219, 189, 140, 0.6);
+  stroke-width: 1;
+}
+
+.settlement-plan-road-edge,
+.settlement-plan-street,
+.settlement-plan-hill-road,
+.settlement-plan-ridge-road {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.settlement-plan-road-edge {
+  stroke: rgba(20, 25, 21, 0.9);
+  stroke-width: 6;
+}
+
+.settlement-plan-street {
+  stroke: #9c8b6b;
+  stroke-width: 3.2;
+}
+
+.settlement-plan-ridge-road {
+  stroke: #8d795c;
+  stroke-width: 3.3;
+}
+
+.settlement-plan-hill-road {
+  stroke: #c1a577;
+  stroke-width: 3;
+  stroke-dasharray: 4 2;
+}
+
+.settlement-plan-building {
+  stroke: rgba(25, 27, 21, 0.92);
+  stroke-width: 0.75;
+  transition: filter 180ms ease, stroke 180ms ease;
+}
+
+.settlement-plan-building.is-detected {
+  stroke: #f0cb8b;
+  stroke-width: 1.8;
+  filter: drop-shadow(0 0 3px rgba(238, 190, 110, 0.88));
+}
+
+.settlement-plan-player {
+  fill: #f0cb8b;
+  stroke: #292b23;
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+
+.settlement-plan-player circle {
+  fill: rgba(240, 203, 139, 0.35);
+}
+
+.settlement-plan-player path {
+  fill: #f0cb8b;
+}
+
+.settlement-plan-detection {
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 2px solid #d3a36b;
+  background: rgba(94, 65, 40, 0.26);
+  color: #e7c99d;
+  font: 0.5rem/1.5 var(--font-code);
+  letter-spacing: 0.04em;
+}
+
+.settlement-plan-home,
+.settlement-plan-townhouse {
+  fill: #b7a785;
+}
+
+.settlement-plan-merchant {
+  fill: #d3a66e;
+}
+
+.settlement-plan-warehouse,
+.settlement-plan-homestead {
+  fill: #8b9675;
+}
+
+.settlement-plan-gate,
+.settlement-plan-civic {
+  fill: #ded0ab;
+  stroke-width: 1.1;
+}
+
+.settlement-plan-service {
+  fill: #8a9b91;
+}
+
+.settlement-plan-harbor {
+  fill: #728f89;
+}
+
+.settlement-plan-label,
+.settlement-plan-north-label {
+  fill: rgba(238, 230, 205, 0.76);
+  font: 4.4px/1 var(--font-code);
+  letter-spacing: 0.22px;
+  paint-order: stroke;
+  stroke: #182019;
+  stroke-width: 1.4px;
+  stroke-linejoin: round;
+}
+
+.settlement-plan-title {
+  fill: #f0d7ae;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.settlement-plan-north-arrow {
+  fill: none;
+  stroke: #e0c596;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.settlement-plan-north-label {
+  font-size: 6px;
+  text-anchor: middle;
 }
 
 .map-contour {
@@ -11893,6 +12325,11 @@ canvas[hidden],
   cursor: pointer;
 }
 
+.is-map-open .bruno-minimap {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .bruno-minimap .signal-map {
   display: block;
   width: 100%;
@@ -12253,6 +12690,10 @@ canvas[hidden],
     max-height: 27vh;
   }
 
+  .settlement-plan-map {
+    max-height: 27vh;
+  }
+
   .skill-map-destinations {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     max-height: none;
@@ -12363,4 +12804,106 @@ canvas[hidden],
   .skills-arrival {
     animation: none;
   }
+}
+
+.skills-experience.is-board-open .bruno-header {
+  min-height: 0;
+  justify-content: flex-end;
+  padding: 14px clamp(18px, 3vw, 42px);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.skills-experience.is-board-open .bruno-brand,
+.skills-experience.is-board-open .bruno-signal-meter,
+.skills-experience.is-board-open .bruno-time-meter,
+.skills-experience.is-board-open .bruno-global-nav,
+.skills-experience.is-board-open .bruno-actions,
+.skills-experience.is-board-open .bruno-compass,
+.skills-experience.is-board-open .bruno-minimap,
+.skills-experience.is-board-open .bruno-proximity-badge,
+.skills-experience.is-board-open .bruno-world-prompt {
+  display: none;
+}
+
+.skills-experience.is-board-open .bruno-header .experience-back-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  margin-left: auto;
+  padding: 0 10px;
+  border: 1px solid rgba(238, 234, 222, 0.3);
+  background: rgba(12, 17, 15, 0.3);
+  color: rgba(238, 234, 222, 0.78);
+  font-size: 0.5rem;
+  backdrop-filter: blur(8px);
+}
+
+.skills-arrival {
+  padding-top: clamp(64px, 8vh, 92px);
+  padding-bottom: clamp(24px, 4vh, 42px);
+}
+
+.arrival-register {
+  max-height: min(84vh, 760px);
+}
+
+.arrival-close {
+  position: absolute;
+  z-index: 2;
+  top: clamp(70px, 8vh, 94px);
+  right: clamp(22px, 5vw, 76px);
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid rgba(238, 234, 222, 0.38);
+  background: rgba(12, 17, 15, 0.5);
+  color: #f1eee5;
+  font: 1.15rem/1 var(--font-code);
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+
+.skills-register-group {
+  min-height: 0;
+  padding: clamp(14px, 1.6vw, 20px);
+}
+
+.skills-register-group h3 {
+  margin: 8px 0 12px;
+}
+
+.skills-register-list span {
+  padding: 5px 7px;
+}
+
+.skills-register-evidence {
+  margin-top: 10px;
+}
+
+.skills-register-explore {
+  margin-top: 8px;
+}
+
+.skills-register-tabs {
+  scrollbar-width: none;
+}
+
+.skills-register-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.arrival-register .skills-register-explore {
+  border-color: rgba(112, 80, 43, 0.55);
+  background: rgba(153, 113, 63, 0.12);
+  color: #4a3825;
+}
+
+.arrival-register .skills-register-explore:hover,
+.arrival-register .skills-register-explore:focus-visible {
+  background: rgba(153, 113, 63, 0.24);
+  outline: 2px solid rgba(112, 80, 43, 0.6);
+  outline-offset: 2px;
 }

@@ -392,6 +392,10 @@ export class WindowManager {
       && activeWindow.element.classList.contains('portfolio-immersive-workspace')
     );
     this.desktop.classList.toggle('immersive-experience-active', isImmersive);
+    this.desktop.classList.toggle(
+      'skills-experience-active',
+      isImmersive && activeWindow.id === 'skills'
+    );
   }
 
   updateDockState() {

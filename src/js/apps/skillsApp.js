@@ -4,6 +4,12 @@ import {
   GARAGE_POSITION,
   ROAD_DEFINITIONS,
   RIVER_MAP_ROUTE,
+  SETTLEMENT,
+  ASHEN_SETTLEMENT_BUILDINGS,
+  SETTLEMENT_HIGHLAND_HOMESTEADS,
+  SETTLEMENT_MAP_LANDMARKS,
+  SETTLEMENT_ROADSIDE_HOMESTEADS,
+  SETTLEMENT_ROWHOUSE_LAYOUT,
   WORLD_LANDMARKS,
   WORLD_DESTINATIONS,
   WORLD_SECRET_SITES,
@@ -35,22 +41,13 @@ const SKILL_EVIDENCE = {
   architecture: 'Implemented role-based access control and audit logging for the UMS, with roles, permissions, and route-level authorization in the OMS.'
 };
 
-const FIELD_EVIDENCE = {
-  trailhead: SKILL_EVIDENCE.languages,
-  crossing: SKILL_EVIDENCE.frontend,
-  settlement: SKILL_EVIDENCE.backend,
-  bones: SKILL_EVIDENCE.databases,
-  signal: SKILL_EVIDENCE.architecture,
-  'high-pass': SKILL_EVIDENCE.tools
-};
-
 const FIELD_STORY_FRAGMENTS = {
-  trailhead: 'The keepers built the first fire where the meadow road met the ridge. Its light was meant to make a stranger feel expected.',
-  crossing: 'The river did not stop the old keepers; it taught them to build a safer way across. Every bridge began as a promise to return.',
-  settlement: 'When the valley emptied, the lamps stayed lit for one another. The crossroads was never the centre of the land, only its heart.',
-  bones: 'The Old Giant kept the valley in its ribs long before the first road was drawn. The keepers left their records in layers of stone.',
-  signal: 'At the highest station, one flame could reach every other fire. The last keeper left the door unbarred.',
-  'high-pass': 'Tools were left at the pass for the next traveller. The mountain was crossed by many hands, not one.'
+  trailhead: 'Languages used in production application work and a real-time data-sync platform.',
+  crossing: 'Frontend work across React, JavaScript and TypeScript at V.K. Lalco and Volody.',
+  settlement: 'Backend systems for HR workflows, audited updates and route-level access control.',
+  bones: 'Relational data models and production work with MySQL and PostgreSQL.',
+  signal: 'Role-based access, audit trails and systems designed around clear boundaries.',
+  'high-pass': 'The day-to-day tools used to build, test and maintain application software.'
 };
 
 const FIELD_SECRET_NOTES = {
@@ -71,10 +68,6 @@ const FIELD_SECRET_NOTES = {
     title: 'A Mark in the Stone',
     note: 'A.S. · Someone wanted the next traveller to know they had made it this far.'
   },
-  'bridge-plank': {
-    title: 'The Secret Plank',
-    note: 'A hollow plank answers with the old truck horn. The keepers had a sense of humour.'
-  },
   'horizon-light': {
     title: 'A Light Beyond the Ridge',
     note: 'After the chain was restored, one small light appeared past the known horizon.'
@@ -84,7 +77,7 @@ const FIELD_SECRET_NOTES = {
 const FIELD_DESTINATIONS = [
   { id: 'trailhead', title: 'The Trailhead', category: 'Languages', caption: 'NOTICE BOARD · COMPLETE SKILLS REGISTER' },
   { id: 'crossing', title: 'The River Crossing', category: 'Frontend', caption: 'FORD · WATERFALL · TIMBER BRIDGE' },
-  { id: 'settlement', title: 'The Ashen Settlement', category: 'Backend', caption: 'VILLAGE LOOP · LANTERN WINDOWS' },
+  { id: 'settlement', title: 'The Ashen Settlement', category: 'Backend', caption: 'ASHEN COAST · HARBOR STREETS' },
   { id: 'bones', title: 'The Old Giant', category: 'Databases', caption: 'FOSSIL RIDGE · HIGH VISTA' },
   { id: 'signal', title: 'The Last Signal', category: 'Architecture & systems', caption: 'RIDGELINE · FINAL BEACON' },
   { id: 'high-pass', title: 'The High Pass', category: 'Tools & DevOps', caption: 'SWITCHBACKS · UPPER TRAIL' }
@@ -151,7 +144,7 @@ const SKILL_BOARD_GROUPS = [
 export function createSkillsAppContent() {
   const container = document.createElement('div');
   container.className = 'skills-experience bruno-playground-app';
-  container.classList.add('is-intro');
+  container.classList.add('is-intro', 'is-board-open');
 
   container.innerHTML = `
     <div class="bruno-shell">
@@ -176,7 +169,7 @@ export function createSkillsAppContent() {
         <a class="experience-back-link" href="#home" data-portfolio-route="home">← BACK TO DESKTOP</a>
 
         <div class="bruno-actions">
-          <button class="bruno-action-btn" id="bruno-btn-board" type="button" aria-expanded="true">
+          <button class="bruno-action-btn" id="bruno-btn-board" type="button" aria-expanded="false">
             <span>SKILLS BOARD</span>
           </button>
           <button class="bruno-action-btn" id="bruno-btn-map" type="button" aria-haspopup="dialog" aria-expanded="false">
@@ -194,18 +187,19 @@ export function createSkillsAppContent() {
         </div>
       </header>
 
-      <section class="skills-arrival" id="skills-arrival" aria-labelledby="skills-arrival-title">
+      <section class="skills-arrival" id="skills-arrival" aria-labelledby="skills-arrival-title" hidden>
+        <button class="arrival-close" id="skills-arrival-close" type="button" aria-label="Close skills noticeboard">×</button>
         <div class="arrival-copy">
-          <span class="arrival-eyebrow">SIGNAL RIDGE · A FIELD GUIDE TO THE WORK</span>
-          <h1 id="skills-arrival-title">One ridge.<br>Six signals.</h1>
-          <p>The complete skills board sits in a pull-off beside the trailhead road. Start the journey, park nearby, then press E to browse all six categories.</p>
-          <button class="arrival-start" id="skills-start" type="button">START THE JOURNEY <span aria-hidden="true">↗</span></button>
-          <span class="arrival-controls">WASD DRIVE · E READ THE BOARD WHEN PARKED · MOUSE DRAG LOOK</span>
+          <span class="arrival-eyebrow">SIGNAL RIDGE · FIELD REGISTER</span>
+          <h1 id="skills-arrival-title">The work,<br>in its place.</h1>
+          <p>Explore the skills behind the projects. Browse the evidence here, or take the road and discover each chapter in the landscape.</p>
+          <button class="arrival-start" id="skills-start" type="button">ENTER THE VALLEY <span aria-hidden="true">↗</span></button>
+          <span class="arrival-controls">WASD DRIVE · E INTERACT · DRAG TO LOOK · M OPEN MAP</span>
         </div>
         <aside class="arrival-register" aria-label="Complete skills noticeboard">
           <header>
-            <span>THE COMPLETE INVENTORY</span>
-            <strong>SKILLS BOARD <i>ALL CATEGORIES</i></strong>
+            <span>FIELD NOTES · 06 CHAPTERS</span>
+            <strong>Skills in context <i>Browse the register</i></strong>
           </header>
           <nav class="skills-register-tabs" id="skills-register-tabs" role="tablist" aria-label="Skills categories"></nav>
           <div class="skills-register-grid" id="skills-register-grid" aria-live="polite"></div>
@@ -232,6 +226,10 @@ export function createSkillsAppContent() {
         </header>
         <div class="skill-map-content">
           <div class="signal-map-wrap">
+            <div class="map-mode-controls" role="group" aria-label="Map area">
+              <button type="button" id="map-mode-ridge" aria-pressed="true">RIDGE MAP</button>
+              <button type="button" id="map-mode-settlement" aria-pressed="false">ASHEN SETTLEMENT PLAN</button>
+            </div>
             <svg class="signal-map" viewBox="0 0 420 300" role="img" aria-labelledby="signal-map-caption">
               <title id="signal-map-caption">Signal Ridge mountain pass, six beacon destinations, and the motor works</title>
               <path class="map-contour" d="M8 65 Q70 28 125 58 T236 39 T346 51 T412 32 M10 242 Q72 197 141 231 T267 219 T408 260"/>
@@ -242,6 +240,7 @@ export function createSkillsAppContent() {
                 <text x="44" y="78">LOWLANDS</text>
                 <text x="125" y="99">RIVERLANDS</text>
                 <text x="194" y="166">ASHEN VALE</text>
+                <text x="340" y="100">ASHEN COAST</text>
                 <text x="275" y="133">FOSSIL RIDGE</text>
                 <text x="334" y="65">SIGNAL RANGE</text>
                 <text x="262" y="239">HIGH PASS</text>
@@ -270,6 +269,9 @@ export function createSkillsAppContent() {
                 <path d="M0 -5 L3 2 L0 1 L-3 2 Z"/>
               </g>
             </svg>
+            <svg class="settlement-plan-map" id="settlement-plan-map" viewBox="0 0 420 300" role="img" aria-label="Detailed Ashen Settlement street and building plan" hidden>
+              <g id="settlement-plan-layer"></g>
+            </svg>
             <div class="map-layer-controls" role="group" aria-label="Map layers">
               <button type="button" data-map-layer="roads" aria-pressed="true">ROADS</button>
               <button type="button" data-map-layer="river" aria-pressed="true">RIVER</button>
@@ -282,13 +284,14 @@ export function createSkillsAppContent() {
               <button type="button" id="map-center-player">CENTER ON ME</button>
               <button type="button" id="map-fit-all">FIT ALL</button>
             </div>
-            <p class="map-scale" aria-label="Map scale">SIGNAL RIDGE · 6 KM × 3.84 KM</p>
+            <p class="map-scale" id="map-scale" aria-label="Map scale">SIGNAL RIDGE · 6 KM × 3.84 KM</p>
             <p class="map-location-readout" id="map-location-readout" aria-live="polite">TRAILHEAD · POSITION UNKNOWN</p>
+            <p class="settlement-plan-detection" id="settlement-plan-detection" aria-live="polite" hidden></p>
           </div>
           <nav class="skill-map-destinations" aria-label="Signal Ridge destinations">
             <button type="button" data-destination="trailhead" aria-pressed="false"><span>01</span><strong>The Trailhead</strong><small>Languages · complete skills board</small><b>↗</b></button>
             <button type="button" data-destination="crossing" aria-pressed="false"><span>02</span><strong>The River Crossing</strong><small>Frontend · ford and timber bridge</small><b>↗</b></button>
-            <button type="button" data-destination="settlement" aria-pressed="false"><span>03</span><strong>The Ashen Settlement</strong><small>Backend · lantern-lit village loop</small><b>↗</b></button>
+            <button type="button" data-destination="settlement" aria-pressed="false"><span>03</span><strong>The Ashen Settlement</strong><small>Backend · market streets and harbor quay</small><b>↗</b></button>
             <button type="button" data-destination="bones" aria-pressed="false"><span>04</span><strong>The Old Giant</strong><small>Databases · fossil ridge vista</small><b>↗</b></button>
             <button type="button" data-destination="signal" aria-pressed="false"><span>05</span><strong>The Last Signal</strong><small>Architecture · final ridge beacon</small><b>↗</b></button>
             <button type="button" data-destination="high-pass" aria-pressed="false"><span>06</span><strong>The High Pass</strong><small>Tools · mountain switchbacks</small><b>↗</b></button>
@@ -450,24 +453,27 @@ export function createSkillsAppContent() {
         <span id="bruno-objective-text" aria-live="polite">FREE ROAM · OPEN THE MAP OR FOLLOW A ROAD</span>
       </div>
 
-      <aside class="bruno-proximity-badge" id="bruno-proximity-badge" aria-live="polite" aria-hidden="true" hidden>
-        <button class="discovery-close" id="discovery-close" type="button" aria-label="Close field note">×</button>
-        <div class="badge-accent-bar" id="badge-accent-bar"></div>
-        <div class="badge-content">
-          <div class="badge-eyebrow">
-            <span class="badge-tag" id="badge-category">FIELD SITE</span>
-            <span class="badge-metric" id="badge-metric">ARRIVE TO DISCOVER</span>
+      <aside class="city-story-dialog" id="city-story-dialog" role="status" aria-live="polite" aria-atomic="true" hidden>
+        <div class="city-story-line">
+          <span class="city-story-eyebrow" id="city-story-eyebrow">THE ASHEN SETTLEMENT</span>
+          <h2 id="city-story-title">A citizen's story</h2>
+          <p class="city-story-copy" id="city-story-copy"></p>
+          <button class="city-story-dismiss" id="city-story-dismiss" type="button" hidden>CONTINUE <span aria-hidden="true">↗</span></button>
+        </div>
+      </aside>
+
+      <aside class="bruno-proximity-prompt is-hidden" id="bruno-proximity-card" aria-live="polite" aria-hidden="true">
+        <div class="prox-card__mark" aria-hidden="true"><span></span></div>
+        <div class="prox-card__body">
+          <div class="prox-card__eyebrow">
+            <span class="prox-card__tag" id="prox-card-tag">THE ASHEN SETTLEMENT</span>
+            <span class="prox-card__dist" id="prox-card-dist">12 M</span>
           </div>
-          <h2 class="badge-title" id="badge-title">A place in the system</h2>
-          <p class="badge-desc" id="badge-desc">Reach a field site to see the work behind it.</p>
-          <div class="badge-chips" id="badge-chips">
-            <!-- Dynamically populated -->
+          <div class="prox-card__title" id="prox-card-title">The Golden Sturgeon</div>
+          <div class="prox-card__action" id="prox-card-action">
+            <kbd class="prox-card__key">E</kbd>
+            <span class="prox-card__hint" id="prox-card-hint">PRESS TO DISCOVER</span>
           </div>
-          <p class="badge-evidence" id="badge-evidence"></p>
-          <button class="badge-work-link" id="badge-relight-button" type="button">E · RELIGHT THIS SIGNAL <span aria-hidden="true">✳</span></button>
-          <button class="badge-work-link" id="badge-board-open" type="button">OPEN THE SKILLS BOARD <span aria-hidden="true">↗</span></button>
-          <a class="badge-work-link" href="#work" data-portfolio-route="projects">SEE PROJECTS <span aria-hidden="true">↗</span></a>
-          <a class="badge-work-link" id="badge-transmit-link" href="#contact" data-portfolio-route="contact" hidden>TRANSMIT · OPEN CONTACT <span aria-hidden="true">↗</span></a>
         </div>
       </aside>
 
@@ -493,6 +499,7 @@ export function createSkillsAppContent() {
   const boardGrid = container.querySelector('#skills-register-grid');
   const boardTabs = container.querySelector('#skills-register-tabs');
   let activeSkillSlide = 0;
+  let boardPointerStart = null;
   const renderSkillSlide = index => {
     activeSkillSlide = (index + SKILL_BOARD_GROUPS.length) % SKILL_BOARD_GROUPS.length;
     boardGrid.querySelectorAll('.skills-register-group').forEach((section, sectionIndex) => {
@@ -572,18 +579,22 @@ export function createSkillsAppContent() {
   container.querySelector('#skills-register-next').addEventListener('click', () => {
     renderSkillSlide(activeSkillSlide + 1);
   });
+  boardGrid.addEventListener('pointerdown', event => {
+    if (event.pointerType !== 'touch' || event.target.closest('button, summary')) return;
+    boardPointerStart = { x: event.clientX, y: event.clientY };
+  });
+  boardGrid.addEventListener('pointerup', event => {
+    if (!boardPointerStart) return;
+    const deltaX = event.clientX - boardPointerStart.x;
+    const deltaY = event.clientY - boardPointerStart.y;
+    boardPointerStart = null;
+    if (Math.abs(deltaX) < 48 || Math.abs(deltaX) < Math.abs(deltaY)) return;
+    renderSkillSlide(activeSkillSlide + (deltaX < 0 ? 1 : -1));
+  });
+  boardGrid.addEventListener('pointercancel', () => {
+    boardPointerStart = null;
+  });
 
-  const badgeEl = container.querySelector('#bruno-proximity-badge');
-  const badgeCategory = container.querySelector('#badge-category');
-  const badgeMetric = container.querySelector('#badge-metric');
-  const badgeTitle = container.querySelector('#badge-title');
-  const badgeDesc = container.querySelector('#badge-desc');
-  const badgeChips = container.querySelector('#badge-chips');
-  const badgeEvidence = container.querySelector('#badge-evidence');
-  const badgeRelightButton = container.querySelector('#badge-relight-button');
-  const badgeTransmitLink = container.querySelector('#badge-transmit-link');
-  const badgeBoardOpen = container.querySelector('#badge-board-open');
-  const badgeProjectLink = container.querySelector('.badge-work-link[href="#work"]');
   const destinationButtons = container.querySelectorAll('#skill-map-panel [data-destination]');
   const garagePanel = container.querySelector('#garage-panel');
   const mapPanel = container.querySelector('#skill-map-panel');
@@ -594,6 +605,12 @@ export function createSkillsAppContent() {
   const rallyButton = container.querySelector('#bruno-btn-rally');
   const arrivalPanel = container.querySelector('#skills-arrival');
   const objectiveText = container.querySelector('#bruno-objective-text');
+  const proxCard = container.querySelector('#bruno-proximity-card');
+  const proxTag = container.querySelector('#prox-card-tag');
+  const proxDist = container.querySelector('#prox-card-dist');
+  const proxTitle = container.querySelector('#prox-card-title');
+  const proxHint = container.querySelector('#prox-card-hint');
+  let activeProximityCardKey = null;
   const mapPlayer = container.querySelector('#map-player');
   const minimapButton = container.querySelector('#bruno-minimap');
   const minimapSvg = container.querySelector('#bruno-minimap-svg');
@@ -602,11 +619,18 @@ export function createSkillsAppContent() {
   const compassLabel = container.querySelector('#bruno-compass-label');
   const waypointStatus = container.querySelector('#map-waypoint-status');
   const mapReadout = container.querySelector('#map-location-readout');
+  const settlementPlanDetection = container.querySelector('#settlement-plan-detection');
   const fogReveal = container.querySelector('#map-fog-reveal');
   const breadcrumbPath = container.querySelector('#map-breadcrumb');
   const waypointPath = container.querySelector('#map-waypoint-route');
   const mapLayerButtons = container.querySelectorAll('[data-map-layer]');
   const mapSvg = container.querySelector('.signal-map');
+  const settlementPlanSvg = container.querySelector('#settlement-plan-map');
+  const settlementPlanLayer = container.querySelector('#settlement-plan-layer');
+  const mapModeRidge = container.querySelector('#map-mode-ridge');
+  const mapModeSettlement = container.querySelector('#map-mode-settlement');
+  const mapScale = container.querySelector('#map-scale');
+  const mapRegionalControls = container.querySelectorAll('.map-layer-controls, .map-view-controls');
   const mapZoomOut = container.querySelector('#map-zoom-out');
   const mapZoomIn = container.querySelector('#map-zoom-in');
   const mapCenterPlayer = container.querySelector('#map-center-player');
@@ -623,6 +647,11 @@ export function createSkillsAppContent() {
   const garageSignalLivery = container.querySelector('#garage-signal-livery');
   const signalCount = container.querySelector('#bruno-signal-count');
   const buildInputs = container.querySelectorAll('[data-build]');
+  const cityStoryDialog = container.querySelector('#city-story-dialog');
+  const cityStoryEyebrow = container.querySelector('#city-story-eyebrow');
+  const cityStoryTitle = container.querySelector('#city-story-title');
+  const cityStoryCopy = container.querySelector('#city-story-copy');
+  const cityStoryDismiss = container.querySelector('#city-story-dismiss');
   let world = null;
   let pendingDestination = null;
   let pendingGarageTravel = false;
@@ -631,7 +660,6 @@ export function createSkillsAppContent() {
   let savedSecrets = [];
   let savedSettlementTopics = [];
   let litSignalIds = new Set();
-  let activeDiscoveryId = null;
   let allSignalsLit = false;
   let rallyActive = false;
   let rallyStartPending = false;
@@ -642,10 +670,31 @@ export function createSkillsAppContent() {
   let lastMapPosition = null;
   let mapZoom = 1;
   let mapCenter = { x: 210, y: 150 };
+  let settlementPlanActive = false;
   let mapDragging = false;
   let lastMapPointer = null;
   const breadcrumbPoints = [];
   const fogRevealCircles = new Map();
+  const hideCityStory = () => {
+    cityStoryDialog.hidden = true;
+    cityStoryDialog.dataset.mode = '';
+    window.clearTimeout(cityStoryTimeout);
+  };
+  let cityStoryTimeout = 0;
+  const openCitizenStory = ({ name, role, story }) => {
+    window.clearTimeout(cityStoryTimeout);
+    cityStoryDialog.dataset.mode = 'citizen';
+    cityStoryEyebrow.textContent = `THE ASHEN SETTLEMENT · ${role.toUpperCase()}`;
+    cityStoryTitle.textContent = name;
+    cityStoryCopy.textContent = story;
+    cityStoryDismiss.hidden = false;
+    cityStoryDialog.hidden = false;
+    proxCard?.classList.add('is-hidden');
+    cityStoryTimeout = window.setTimeout(hideCityStory, 16000);
+  };
+  cityStoryDismiss.addEventListener('click', () => {
+    hideCityStory();
+  });
   container.classList.toggle('is-reduced-motion', reducedMotion);
   motionToggle.setAttribute('aria-pressed', String(reducedMotion));
   motionToggle.textContent = `REDUCED MOTION ${reducedMotion ? 'ON' : 'OFF'}`;
@@ -679,7 +728,7 @@ export function createSkillsAppContent() {
     rallyButton.querySelector('span').textContent = 'OPTIONAL RALLY';
     destinationButtons.forEach(button => button.setAttribute('aria-pressed', 'false'));
     container.querySelectorAll('[data-map-marker]').forEach(marker => marker.classList.remove('is-selected'));
-    closeDiscovery();
+    hideCityStory();
     if (world?.travelToGarage()) {
       pendingGarageTravel = false;
       objectiveText.textContent = 'MOTOR WORKS · BUILD READY · DRIVE BACK TO THE RIDGE';
@@ -776,41 +825,31 @@ export function createSkillsAppContent() {
   function showFieldDiscovery(destinationId) {
     const destination = FIELD_DESTINATIONS.find(item => item.id === destinationId);
     if (!destination) return;
-
-    badgeCategory.textContent = `SIGNAL RIDGE · ${destination.category.toUpperCase()} BEACON`;
-    badgeMetric.textContent = destination.caption;
-    badgeTitle.textContent = destination.title;
-    badgeDesc.textContent = 'Beacon relit. The ridge brightens as the route opens; the complete inventory stays together on the Trailhead board.';
-    badgeChips.replaceChildren();
-    const skillGroup = SKILL_BOARD_GROUPS.find(group => group.title === destination.category);
-    skillGroup?.skills.slice(0, 4).forEach(skill => {
-      const chip = document.createElement('span');
-      chip.textContent = skill;
-      badgeChips.append(chip);
-    });
-    badgeEvidence.textContent = FIELD_EVIDENCE[destinationId];
-    activeDiscoveryId = destinationId;
     const isLit = litSignalIds.has(destinationId);
     const requiredSignals = ['trailhead', 'crossing', 'settlement', 'bones'];
-    const finalSignalLocked = destinationId === 'signal'
-      && !requiredSignals.every(id => litSignalIds.has(id));
-    const settlementLocked = destinationId === 'settlement'
-      && savedSettlementTopics.length < SETTLEMENT_TOPICS.length;
-    badgeRelightButton.hidden = isLit;
-    badgeDesc.textContent = isLit
-      ? `Signal restored. ${FIELD_STORY_FRAGMENTS[destinationId]}`
-      : finalSignalLocked
-        ? `The final beacon is sealed until the first four signals are lit. ${requiredSignals.filter(id => !litSignalIds.has(id)).length} remain.`
-        : settlementLocked
-          ? `The settlement signal is sealed. Light all ${SETTLEMENT_TOPICS.length} house lamps along the village loop first.`
-        : `Field signal found. ${FIELD_STORY_FRAGMENTS[destinationId]}`;
-    badgeRelightButton.disabled = finalSignalLocked || settlementLocked;
-    badgeBoardOpen.hidden = false;
-    badgeProjectLink.hidden = false;
-    badgeTransmitLink.hidden = !allSignalsLit;
-    badgeEl.hidden = false;
-    badgeEl.classList.add('is-visible');
-    badgeEl.setAttribute('aria-hidden', 'false');
+    const isLocked = (destinationId === 'signal' && !requiredSignals.every(id => litSignalIds.has(id)))
+      || (destinationId === 'settlement' && savedSettlementTopics.length < SETTLEMENT_TOPICS.length);
+    const role = destinationId === 'settlement' ? 'Town signal' : 'Signal fire';
+    const detail = destinationId === 'settlement'
+      ? 'The market streets connect to the hillside crofts. Follow the lanes and light the house lamps along the way.'
+      : FIELD_STORY_FRAGMENTS[destinationId];
+    const prompt = isLit
+      ? 'This signal is already burning.'
+      : isLocked
+        ? destinationId === 'signal'
+          ? 'The last signal stays sealed until the first four fires are restored.'
+          : `The town signal waits until all ${SETTLEMENT_TOPICS.length} market-house lamps are lit.`
+        : 'The beacon waits beside the road. Press E near it to restore the fire.';
+    openCitizenStory({
+      name: destination.title,
+      role,
+      story: `${prompt} ${detail}`
+    });
+    objectiveText.textContent = isLit
+      ? `SIGNAL LIT · ${destination.title.toUpperCase()}`
+      : isLocked
+        ? `BEACON FOUND · ${destination.title.toUpperCase()} · THE ROAD AHEAD IS SEALED`
+        : `BEACON FOUND · ${destination.title.toUpperCase()} · PRESS E NEAR THE FIRE`;
   }
 
   function showSecretDiscovery(secretId) {
@@ -835,51 +874,23 @@ export function createSkillsAppContent() {
     marker.append(markerTitle);
     landmarkLayer.append(marker);
     addFogReveal(screenPoint.x, screenPoint.y, 16, `secret-${secretId}`);
-    badgeCategory.textContent = 'HIDDEN FIELD NOTE';
-    badgeMetric.textContent = 'SIGNAL RIDGE · SECRET FOUND';
-    badgeTitle.textContent = secret.title;
-    badgeDesc.textContent = secret.note;
-    badgeChips.replaceChildren();
-    badgeEvidence.textContent = '';
-    badgeRelightButton.hidden = true;
-    badgeRelightButton.disabled = true;
-    badgeBoardOpen.hidden = true;
-    badgeProjectLink.hidden = !secret.link;
-    badgeTransmitLink.hidden = true;
-    activeDiscoveryId = null;
-    badgeEl.hidden = false;
-    badgeEl.classList.add('is-visible');
-    badgeEl.setAttribute('aria-hidden', 'false');
+    openCitizenStory({
+      name: secret.title,
+      role: 'Hidden field note',
+      story: secret.note
+    });
     objectiveText.textContent = `SECRET FOUND · ${secret.title.toUpperCase()}`;
   }
 
   function showSettlementTopic(topic) {
-    badgeCategory.textContent = 'ASHEN SETTLEMENT · BACKEND TOPIC';
-    badgeMetric.textContent = `HOUSE LAMP ${topic.litCount} OF ${topic.total} · THE LOOP IS WAKING`;
-    badgeTitle.textContent = topic.title;
-    badgeDesc.textContent = 'A field note from the village loop. Light every house lamp to open the settlement signal.';
-    badgeChips.replaceChildren();
-    const chip = document.createElement('span');
-    chip.textContent = topic.title;
-    badgeChips.append(chip);
-    badgeEvidence.textContent = SKILL_EVIDENCE.backend;
-    badgeRelightButton.hidden = true;
-    badgeRelightButton.disabled = true;
-    badgeBoardOpen.hidden = false;
-    badgeProjectLink.hidden = true;
-    badgeTransmitLink.hidden = true;
-    activeDiscoveryId = null;
-    badgeEl.hidden = false;
-    badgeEl.classList.add('is-visible');
-    badgeEl.setAttribute('aria-hidden', 'false');
+    hideCityStory();
+    openCitizenStory({
+      name: topic.establishment,
+      role: topic.district || 'Market street',
+      story: `We trade in ${topic.title}. This is house lamp ${topic.litCount} of ${topic.total}; every light brings the town signal closer.`
+    });
     objectiveText.textContent = `HOUSE LIT · ${topic.title.toUpperCase()} · ${topic.litCount}/${topic.total}`;
   }
-
-  const closeDiscovery = () => {
-    badgeEl.classList.remove('is-visible');
-    badgeEl.hidden = true;
-    badgeEl.setAttribute('aria-hidden', 'true');
-  };
 
   const startJourney = destinationId => {
     if (destinationId) {
@@ -900,6 +911,8 @@ export function createSkillsAppContent() {
     }
     started = true;
     arrivalPanel.hidden = true;
+    container.querySelector('#skills-start').hidden = true;
+    container.classList.remove('is-board-open');
     boardButton.setAttribute('aria-expanded', 'false');
     container.classList.remove('is-intro');
     minimapButton.hidden = false;
@@ -954,10 +967,169 @@ export function createSkillsAppContent() {
       path.dataset.roadTo = String(to);
     }
     parent.append(path);
+    return path;
   };
-  ROAD_DEFINITIONS.forEach(({ mapPoints, kind, closed, from, to }) => {
-    if (kind === 'pass') appendMapPath(roadLayer, mapPoints, 'map-road-shoulder', closed, from, to);
-    appendMapPath(roadLayer, mapPoints, kind === 'trail' ? 'map-road-trail' : 'map-road', closed, from, to);
+  const planRoads = ROAD_DEFINITIONS.filter(road =>
+    road.surface === 'cobblestone'
+    || road.from === 'settlement-outskirts-road'
+    || (road.from === 3 && road.to === 4)
+  ).map(road => ({
+    ...road,
+    localPoints: road.points
+      .map(([x, z]) => [x - SETTLEMENT.x, z - SETTLEMENT.z])
+      .filter(([x, z]) => x >= -250 && z >= -220)
+  }));
+  const planBuildings = [
+    ...SETTLEMENT_ROWHOUSE_LAYOUT.map((house, index) => ({ ...house, id: `rowhouse-${index}`, label: `Townhouse ${index + 1}` })),
+    ...ASHEN_SETTLEMENT_BUILDINGS.map(building => ({ ...building, id: building.name, label: building.name })),
+    ...SETTLEMENT_ROADSIDE_HOMESTEADS.map(site => ({ ...site, type: 'homestead', rot: 0 })),
+    ...SETTLEMENT_HIGHLAND_HOMESTEADS.map(site => ({ ...site, type: 'homestead' }))
+  ];
+  const planBoundsPoints = [
+    ...planBuildings.flatMap(({ x, z, w, d }) => [
+      [x - w / 2 - 8, z - d / 2 - 8],
+      [x + w / 2 + 8, z + d / 2 + 8]
+    ]),
+    ...SETTLEMENT_MAP_LANDMARKS.map(({ x, z, w, d }) => [
+      x - w / 2 - 8, z - d / 2 - 8
+    ]).flatMap(([x, z], index) => {
+      const { w, d } = SETTLEMENT_MAP_LANDMARKS[index];
+      return [[x, z], [x + w + 16, z + d + 16]];
+    }),
+    ...planRoads.flatMap(road => road.localPoints)
+  ];
+  const planBounds = planBoundsPoints.reduce((bounds, [x, z]) => ({
+    minX: Math.min(bounds.minX, x),
+    maxX: Math.max(bounds.maxX, x),
+    minZ: Math.min(bounds.minZ, z),
+    maxZ: Math.max(bounds.maxZ, z)
+  }), { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity });
+  const planScale = Math.min(
+    364 / (planBounds.maxX - planBounds.minX),
+    250 / (planBounds.maxZ - planBounds.minZ)
+  );
+  const planCenterX = (planBounds.minX + planBounds.maxX) / 2;
+  const planCenterZ = (planBounds.minZ + planBounds.maxZ) / 2;
+  const planPoint = (x, z) => ({
+    x: 210 + (x - planCenterX) * planScale,
+    y: 150 - (z - planCenterZ) * planScale
+  });
+  const planPath = points => points.map(([x, z], index) => {
+    const point = planPoint(x, z);
+    return `${index ? 'L' : 'M'} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
+  }).join(' ');
+  const appendPlanElement = (tag, className, attributes = {}) => {
+    const element = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    if (className) element.setAttribute('class', className);
+    Object.entries(attributes).forEach(([name, value]) => element.setAttribute(name, String(value)));
+    settlementPlanLayer.append(element);
+    return element;
+  };
+  const planBackground = appendPlanElement('rect', 'settlement-plan-background', {
+    x: 0, y: 0, width: 420, height: 300
+  });
+  planBackground.setAttribute('aria-hidden', 'true');
+  const plaza = SETTLEMENT_MAP_LANDMARKS.find(item => item.type === 'plaza');
+  if (plaza) {
+    const center = planPoint(plaza.x, plaza.z);
+    appendPlanElement('rect', 'settlement-plan-plaza', {
+      x: center.x - plaza.w * 0.46 / 2,
+      y: center.y - plaza.d * 0.46 / 2,
+      width: plaza.w * 0.46,
+      height: plaza.d * 0.46,
+      rx: 2
+    });
+  }
+  planRoads.forEach(road => {
+    const width = road.width ?? (road.surface === 'cobblestone' ? 8.5 : road.kind === 'pass' ? 22 : 18);
+    const edge = appendPlanElement('path', 'settlement-plan-road-edge', { d: planPath(road.localPoints) });
+    edge.setAttribute('stroke-width', String(Math.max(2.2, width * planScale * 0.76 + 2)));
+    const surface = appendPlanElement(
+      'path',
+      road.to === 'settlement-highland-hamlet'
+        ? 'settlement-plan-hill-road'
+        : road.from === 3 && road.to === 4
+          ? 'settlement-plan-ridge-road'
+          : 'settlement-plan-street',
+      { d: planPath(road.localPoints) }
+    );
+    surface.setAttribute('stroke-width', String(Math.max(1.5, width * planScale * 0.76)));
+  });
+  const planBuildingElements = new Map();
+  const appendPlanFootprint = ({ id, label, type, x, z, w, d, rot = 0, trade }) => {
+    const center = planPoint(x, z);
+    const width = w * 0.46;
+    const depth = d * 0.46;
+    const footprint = appendPlanElement('rect', `settlement-plan-building settlement-plan-${type}`, {
+      x: (center.x - width / 2).toFixed(2),
+      y: (center.y - depth / 2).toFixed(2),
+      width: width.toFixed(2),
+      height: depth.toFixed(2),
+      transform: `rotate(${-rot * 180 / Math.PI} ${center.x.toFixed(2)} ${center.y.toFixed(2)})`
+    });
+    if (id) {
+      footprint.dataset.siteId = id;
+      planBuildingElements.set(id, footprint);
+    }
+    const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+    title.textContent = trade ? `${label} · ${trade}` : label;
+    footprint.append(title);
+  };
+  planBuildings.forEach(building => appendPlanFootprint({
+    ...building,
+    type: building.type ?? 'home'
+  }));
+  SETTLEMENT_MAP_LANDMARKS.filter(item => item.type !== 'plaza').forEach(landmark => {
+    appendPlanFootprint({
+      ...landmark,
+      label: landmark.label,
+      type: landmark.type
+    });
+  });
+  const appendPlanLabel = (label, x, z, className = '') => {
+    const point = planPoint(x, z);
+    const text = appendPlanElement('text', `settlement-plan-label ${className}`.trim(), {
+      x: point.x.toFixed(1),
+      y: point.y.toFixed(1)
+    });
+    text.textContent = label;
+  };
+  appendPlanLabel('ASHEN SETTLEMENT', 35, -95, 'settlement-plan-title');
+  appendPlanLabel('MARKET WARD', 44, -15);
+  appendPlanLabel('HARBOR QUAY', 195, -68);
+  appendPlanLabel('CROFT LANE', -182, -181);
+  appendPlanLabel('GATEWARD INN', -179, -103);
+  const planPlayer = appendPlanElement('g', 'settlement-plan-player', {
+    'aria-label': 'Player position on settlement plan',
+    display: 'none'
+  });
+  const planPlayerHalo = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  planPlayerHalo.setAttribute('r', '7');
+  planPlayer.append(planPlayerHalo);
+  const planPlayerArrow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  planPlayerArrow.setAttribute('d', 'M 0 -5 L 3 2 L 0 1 L -3 2 Z');
+  planPlayer.append(planPlayerArrow);
+  appendPlanElement('path', 'settlement-plan-north-arrow', {
+    d: 'M 396 40 L 396 20 M 390 28 L 396 20 L 402 28'
+  });
+  const northLabel = appendPlanElement('text', 'settlement-plan-north-label', { x: 396, y: 15 });
+  northLabel.textContent = 'N';
+
+  ROAD_DEFINITIONS.forEach(({ mapPoints, kind, closed, from, to, width }) => {
+    const mapRoadWidth = Math.max(1.25, (width ?? (kind === 'pass' ? 22 : 18)) * 380 / 6000);
+    if (kind === 'pass') {
+      const shoulder = appendMapPath(roadLayer, mapPoints, 'map-road-shoulder', closed, from, to);
+      shoulder.setAttribute('stroke-width', String(mapRoadWidth + 2.2));
+    }
+    const road = appendMapPath(
+      roadLayer,
+      mapPoints,
+      kind === 'trail' ? 'map-road-trail' : 'map-road',
+      closed,
+      from,
+      to
+    );
+    road.setAttribute('stroke-width', String(mapRoadWidth));
   });
   container.querySelector('.map-river').setAttribute('d', mapPathFromPoints(RIVER_MAP_ROUTE));
   const landmarkLayer = container.querySelector('#map-landmark-layer');
@@ -1035,6 +1207,28 @@ export function createSkillsAppContent() {
   const updateMapPlayer = (position, heading = 0, elevation = 0) => {
     if (!position || !mapPlayer) return;
     lastMapPosition = { x: position.x, z: position.z };
+    const localX = position.x - SETTLEMENT.x;
+    const localZ = position.z - SETTLEMENT.z;
+    const nearbyBuildings = planBuildings
+      .map(building => ({
+        building,
+        distance: Math.hypot(localX - building.x, localZ - building.z)
+      }))
+      .filter(({ distance }) => distance <= 105)
+      .sort((left, right) => left.distance - right.distance);
+    planBuildingElements.forEach(element => element.classList.remove('is-detected'));
+    nearbyBuildings.forEach(({ building }) => {
+      planBuildingElements.get(building.id)?.classList.add('is-detected');
+    });
+    const isSettlementArea = nearbyBuildings.length > 0 || Math.hypot(localX, localZ) < 510;
+    const planPosition = planPoint(localX, localZ);
+    planPlayer.setAttribute('transform', `translate(${planPosition.x.toFixed(1)} ${planPosition.y.toFixed(1)}) rotate(${(heading * 180 / Math.PI).toFixed(1)})`);
+    planPlayer.setAttribute('display', isSettlementArea ? 'inline' : 'none');
+    settlementPlanDetection.hidden = !isSettlementArea;
+    if (isSettlementArea) {
+      const nearest = nearbyBuildings[0]?.building.label ?? 'OUTER SETTLEMENT';
+      settlementPlanDetection.textContent = `MAP DETECTION · ${nearbyBuildings.length} BUILT SITES NEARBY · NEAREST: ${nearest.toUpperCase()}`;
+    }
     const point = worldToMap(position.x, position.z);
     const screenPoint = mapScreenPoint(point.x, point.y);
     const transform = `translate(${screenPoint.x.toFixed(1)} ${screenPoint.y.toFixed(1)}) rotate(${(heading * 180 / Math.PI).toFixed(1)})`;
@@ -1057,14 +1251,16 @@ export function createSkillsAppContent() {
     if (selectedDestinationId) {
       const destination = WORLD_DESTINATIONS.find(item => item.id === selectedDestinationId);
       if (destination) {
-        const target = worldToMap(destination.x, destination.z);
+        const targetX = destination.markerX ?? destination.x;
+        const targetZ = destination.markerZ ?? destination.z;
+        const target = worldToMap(targetX, targetZ);
         const targetScreen = mapScreenPoint(target.x, target.y);
         waypointPath?.setAttribute(
           'd',
           `M ${screenPoint.x.toFixed(1)} ${screenPoint.y.toFixed(1)} L ${targetScreen.x.toFixed(1)} ${targetScreen.y.toFixed(1)}`
         );
-        const dx = destination.x - position.x;
-        const dz = destination.z - position.z;
+        const dx = targetX - position.x;
+        const dz = targetZ - position.z;
         const bearing = Math.atan2(dx, dz) - heading;
         compassNeedle.style.transform = `rotate(${(bearing * 180 / Math.PI).toFixed(1)}deg)`;
         compassLabel.textContent = `${destination.title} · ${Math.round(Math.hypot(dx, dz))} M`;
@@ -1081,6 +1277,7 @@ export function createSkillsAppContent() {
 
   const closeMap = (restoreFocus = true) => {
     mapPanel.hidden = true;
+    container.classList.remove('is-map-open');
     mapButton.setAttribute('aria-expanded', 'false');
     world?.setPaused(!started || !controlsPanel.hidden || !arrivalPanel.hidden);
     if (restoreFocus) mapButton.focus();
@@ -1089,11 +1286,14 @@ export function createSkillsAppContent() {
   const openMap = () => {
     controlsPanel.hidden = true;
     controlsButton.setAttribute('aria-expanded', 'false');
+    hideCityStory();
+    proxCard?.classList.add('is-hidden');
     if (started) {
       arrivalPanel.hidden = true;
       boardButton.setAttribute('aria-expanded', 'false');
     }
     mapPanel.hidden = false;
+    container.classList.add('is-map-open');
     mapButton.setAttribute('aria-expanded', 'true');
     world?.setPaused(true);
     container.querySelector('#skill-map-close').focus();
@@ -1181,6 +1381,21 @@ export function createSkillsAppContent() {
       else if (layer === 'fog') container.querySelector('.map-fog-overlay').classList.toggle('is-hidden', !enabled);
     });
   });
+  const setSettlementPlanMode = active => {
+    settlementPlanActive = active;
+    mapSvg.toggleAttribute('hidden', active);
+    settlementPlanSvg.toggleAttribute('hidden', !active);
+    mapRegionalControls.forEach(control => {
+      control.hidden = active;
+    });
+    mapModeRidge.setAttribute('aria-pressed', String(!active));
+    mapModeSettlement.setAttribute('aria-pressed', String(active));
+    mapScale.textContent = active
+      ? 'ASHEN SETTLEMENT · STREET & BUILDING PLAN'
+      : 'SIGNAL RIDGE · 6 KM × 3.84 KM';
+  };
+  mapModeRidge.addEventListener('click', () => setSettlementPlanMode(false));
+  mapModeSettlement.addEventListener('click', () => setSettlementPlanMode(true));
   mapZoomIn.addEventListener('click', () => zoomMap(0.5));
   mapZoomOut.addEventListener('click', () => zoomMap(-0.5));
   mapFitAll.addEventListener('click', () => {
@@ -1226,15 +1441,26 @@ export function createSkillsAppContent() {
 
   const openSkillsBoard = () => {
     if (!started || !arrivalPanel.hidden) return;
-    closeDiscovery();
+    if (world?.noticeBoardCinematic?.phase === 'enter') return;
+    hideCityStory();
     mapPanel.hidden = true;
     mapButton.setAttribute('aria-expanded', 'false');
     controlsPanel.hidden = true;
     controlsButton.setAttribute('aria-expanded', 'false');
     arrivalPanel.hidden = false;
+    container.querySelector('#skills-start').hidden = true;
+    container.classList.add('is-board-open');
     boardButton.setAttribute('aria-expanded', 'true');
     world?.setPaused(true);
     boardTabs.querySelector('[aria-selected="true"]')?.focus();
+  };
+
+  const closeSkillsBoard = () => {
+    arrivalPanel.hidden = true;
+    container.classList.remove('is-board-open');
+    boardButton.setAttribute('aria-expanded', 'false');
+    world?.exitNoticeBoardView?.();
+    world?.setPaused(!controlsPanel.hidden);
   };
 
   boardButton.addEventListener('click', () => {
@@ -1243,10 +1469,10 @@ export function createSkillsAppContent() {
       openSkillsBoard();
       return;
     }
-    arrivalPanel.hidden = true;
-    boardButton.setAttribute('aria-expanded', 'false');
-    world?.setPaused(!controlsPanel.hidden);
+    closeSkillsBoard();
   });
+  container.querySelector('#skills-arrival-close')?.addEventListener('click', closeSkillsBoard);
+
 
   mapButton.addEventListener('click', () => {
     if (mapPanel.hidden) openMap();
@@ -1255,27 +1481,11 @@ export function createSkillsAppContent() {
   minimapButton.addEventListener('click', openMap);
   container.querySelector('#fallback-map-open')?.addEventListener('click', openMap);
   container.querySelector('#skill-map-close').addEventListener('click', closeMap);
-  container.querySelector('#discovery-close').addEventListener('click', closeDiscovery);
-  container.querySelector('#badge-board-open').addEventListener('click', () => {
-    closeDiscovery();
-    if (arrivalPanel.hidden) boardButton.click();
-  });
-  badgeRelightButton.addEventListener('click', () => {
-    if (activeDiscoveryId && !world?.relightBeacon(activeDiscoveryId)) {
-      const stillLocked = activeDiscoveryId === 'signal'
-        && !['trailhead', 'crossing', 'settlement', 'bones'].every(id => litSignalIds.has(id));
-      badgeDesc.textContent = stillLocked
-        ? 'The Last Signal needs the first four fires restored. Follow the old roads back to the dark beacons.'
-        : 'Move closer to the field beacon to relight it.';
-      objectiveText.textContent = stillLocked
-        ? 'THE LAST SIGNAL IS SEALED · RESTORE THE FIRST FOUR FIRES'
-        : 'MOVE CLOSER TO THE FIELD BEACON TO RELIGHT IT';
-    }
-  });
 
   controlsButton.addEventListener('click', () => {
     const open = controlsPanel.hidden;
     mapPanel.hidden = true;
+    container.classList.remove('is-map-open');
     mapButton.setAttribute('aria-expanded', 'false');
     if (started) {
       arrivalPanel.hidden = true;
@@ -1300,7 +1510,7 @@ export function createSkillsAppContent() {
     if (rallyActive) {
       if (!started) startJourney();
       pendingDestination = null;
-      closeDiscovery();
+      hideCityStory();
       destinationButtons.forEach(button => button.setAttribute('aria-pressed', 'false'));
       container.querySelectorAll('[data-map-marker]').forEach(marker => marker.classList.remove('is-selected'));
       if (world) world.startRally();
@@ -1323,12 +1533,29 @@ export function createSkillsAppContent() {
     if (event.target instanceof HTMLElement && (
       event.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)
     )) return;
+    if (!cityStoryDialog.hidden) {
+      if (event.code === 'Escape' && cityStoryDialog.dataset.mode === 'citizen') {
+        hideCityStory();
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+      if (event.code === 'KeyE' && cityStoryDialog.dataset.mode === 'citizen') {
+        hideCityStory();
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    }
+    if (event.code === 'KeyE' && !event.repeat && !arrivalPanel.hidden && started) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      closeSkillsBoard();
+      boardButton.focus();
+      return;
+    }
     if (event.code === 'Escape') {
       if (!mapPanel.hidden) closeMap();
       else if (!arrivalPanel.hidden && started) {
-        arrivalPanel.hidden = true;
-        boardButton.setAttribute('aria-expanded', 'false');
-        world?.setPaused(!controlsPanel.hidden);
+        closeSkillsBoard();
         boardButton.focus();
       }
       else if (!controlsPanel.hidden) {
@@ -1352,6 +1579,7 @@ export function createSkillsAppContent() {
     if (canvas) canvas.hidden = true;
     container.querySelector('#bruno-scene-fallback').hidden = false;
     container.classList.add('is-intro');
+    container.classList.add('is-board-open');
     arrivalPanel.hidden = false;
     container.querySelector('#skills-start').hidden = true;
   };
@@ -1384,6 +1612,10 @@ export function createSkillsAppContent() {
           nearbySecretId,
           nearbySettlementTopic,
           nearSkillsBoard,
+          skillsBoardDistance,
+          nearPierEnd,
+          pierDistance,
+          proximity,
           settlementTopicCount,
           settlementTopicTotal,
           lowRange,
@@ -1423,6 +1655,7 @@ export function createSkillsAppContent() {
               lowlands: 'LOWLANDS',
               riverlands: 'RIVERLANDS',
               ashen: 'ASHEN VALE',
+              ashenCoast: 'ASHEN COAST',
               fossil: 'FOSSIL RIDGE',
               signal: 'SIGNAL RANGE',
               highPass: 'HIGH PASS',
@@ -1438,14 +1671,94 @@ export function createSkillsAppContent() {
               minimapSvg.dataset.timePhase = phase;
             }
           }
+
+          if (proxCard) {
+            const targets = [
+              proximity?.secret && {
+                key: `secret:${proximity.secret.id}`,
+                distance: proximity.secret.distance,
+                showRadius: 12,
+                hideRadius: 16,
+                tag: 'HIDDEN PLACE',
+                title: FIELD_SECRET_NOTES[proximity.secret.id]?.title || proximity.secret.title,
+                hint: 'STOP AND PRESS E TO INVESTIGATE'
+              },
+              proximity?.citizen && {
+                key: `citizen:${proximity.citizen.name}`,
+                distance: proximity.citizen.distance,
+                showRadius: 10,
+                hideRadius: 14,
+                tag: `THE ASHEN SETTLEMENT · ${proximity.citizen.role}`,
+                title: proximity.citizen.name,
+                hint: speed > 6 ? 'SLOW DOWN TO TALK' : 'PRESS E TO HEAR THEIR STORY'
+              },
+              proximity?.settlement && {
+                key: `settlement:${proximity.settlement.id}`,
+                distance: proximity.settlement.distance,
+                showRadius: 11,
+                hideRadius: 14,
+                tag: `THE ASHEN SETTLEMENT · ${proximity.settlement.district || 'ASHEN COAST'}`,
+                title: proximity.settlement.establishment || proximity.settlement.title,
+                hint: proximity.settlement.lit ? 'HOUSE LAMP LIT · PRESS E TO VIEW' : 'PRESS E TO DISCOVER'
+              },
+              proximity?.board && {
+                key: 'board',
+                distance: proximity.board.distance,
+                showRadius: 22,
+                hideRadius: 28,
+                tag: 'TRAILHEAD · NOTICE BOARD',
+                title: 'Skills in context',
+                hint: speed > 6 ? 'SLOW DOWN TO READ' : 'PRESS E TO ENTER BOARD VIEW'
+              },
+              proximity?.beacon && {
+                key: `beacon:${proximity.beacon.id}`,
+                distance: proximity.beacon.distance,
+                showRadius: 18,
+                hideRadius: 24,
+                tag: 'SIGNAL BEACON',
+                title: proximity.beacon.title,
+                hint: proximity.beacon.lit ? 'SIGNAL RESTORED' : 'PRESS E TO RELIGHT SIGNAL'
+              },
+              proximity?.pier && {
+                key: 'pier',
+                distance: proximity.pier.distance,
+                showRadius: 6,
+                hideRadius: 10,
+                tag: 'THE LAST DOCK',
+                title: 'Signal Island',
+                hint: 'AN ISLAND IN SIGHT · SOMETHING WAITS BEYOND'
+              }
+            ].filter(target => target && Number.isFinite(target.distance));
+            const target = targets.find(item =>
+              item.distance <= (item.key === activeProximityCardKey ? item.hideRadius : item.showRadius)
+            );
+
+            if (target) {
+              activeProximityCardKey = target.key;
+              proxCard.dataset.kind = target.key.split(':')[0];
+              proxTag.textContent = target.tag;
+              proxTitle.textContent = target.title;
+              proxHint.textContent = target.hint;
+              proxDist.textContent = `${target.distance} M`;
+              proxCard.classList.remove('is-hidden');
+              proxCard.setAttribute('aria-hidden', 'false');
+            } else {
+              activeProximityCardKey = null;
+              proxCard.classList.add('is-hidden');
+              proxCard.setAttribute('aria-hidden', 'true');
+            }
+          }
+
           if (Number.isFinite(checkpoint) && Number.isFinite(totalCheckpoints)) {
             const destination = FIELD_DESTINATIONS.find(item => item.id === destinationId);
             const objective = allSignalsLit
               ? 'ALL SIX SIGNALS LIT · THE RIDGE IS TRANSMITTING · CONTACT IS OPEN'
-              : nearbySecretId
+              : nearPierEnd
+                ? 'THE LAST DOCK · THE ENDLESS SEA · AN ISLAND IN SIGHT FAR AWAY'
+                : nearbySecretId
                 ? `HIDDEN PLACE · STOP AND PRESS E · ${FIELD_SECRET_NOTES[nearbySecretId]?.title.toUpperCase()}`
                 : nearbySettlementTopic
-                  ? `ASHEN SETTLEMENT · STOP AND PRESS E · ${nearbySettlementTopic.title.toUpperCase()}`
+                  ? `THE ASHEN SETTLEMENT · STOP AND PRESS E · ${(nearbySettlementTopic.establishment || nearbySettlementTopic.title).toUpperCase()}`
                   : nearSkillsBoard
                     ? speed > 8
                       ? 'TRAILHEAD BOARD · STOP THE CAR TO BROWSE SIX SKILLS'
@@ -1492,11 +1805,6 @@ export function createSkillsAppContent() {
           });
           updateMapSignalState();
           if (signalCount) signalCount.textContent = String(signals.length);
-          if (activeDiscoveryId && litSignalIds.has(activeDiscoveryId)) {
-            badgeRelightButton.hidden = true;
-            badgeDesc.textContent = `Signal restored. ${FIELD_STORY_FRAGMENTS[activeDiscoveryId]}`;
-            badgeTransmitLink.hidden = !allSignalsLit;
-          }
           try {
             window.localStorage.setItem(SIGNAL_PROGRESS_STORAGE_KEY, JSON.stringify(signals));
           } catch (error) {
@@ -1524,7 +1832,8 @@ export function createSkillsAppContent() {
         },
         SETTLEMENT_TOPICS,
         savedSettlementTopics,
-        openSkillsBoard
+        openSkillsBoard,
+        openCitizenStory
       );
 
       canvas._world = world;
@@ -1538,6 +1847,7 @@ export function createSkillsAppContent() {
       }
       pendingVehicleBuild = world.setVehicleBuild(pendingVehicleBuild);
       syncBuildControls(pendingVehicleBuild);
+      if (!started) startJourney();
       world.setPaused(!started || !mapPanel.hidden || !controlsPanel.hidden || !arrivalPanel.hidden);
       if (pendingDestination) world.setDestination(pendingDestination);
       if (pendingGarageTravel) {

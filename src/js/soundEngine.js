@@ -83,6 +83,7 @@ class SoundEngine {
       lowlands: { cutoff: 420, drone: 58, noise: 0.035 },
       riverlands: { cutoff: 780, drone: 72, noise: 0.075 },
       ashen: { cutoff: 250, drone: 49, noise: 0.028 },
+      ashenCoast: { cutoff: 880, drone: 66, noise: 0.068 },
       fossil: { cutoff: 1100, drone: 64, noise: 0.06 },
       signal: { cutoff: 560, drone: 82, noise: 0.048 },
       highPass: { cutoff: 1350, drone: 92, noise: 0.065 },
