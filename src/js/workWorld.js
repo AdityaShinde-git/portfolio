@@ -1,202 +1,407 @@
 import * as THREE from 'three';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
-const clamp01 = value => Math.max(0, Math.min(1, value));
+/* ------------------------------------------------------------------ */
+/*  Helpers                                                            */
+/* ------------------------------------------------------------------ */
+
+const clamp01 = v => Math.max(0, Math.min(1, v));
+const smooth = (a, b, x) => {
+  const t = clamp01((x - a) / (b - a));
+  return t * t * (3 - 2 * t);
+};
+
 const WALK_TURNS = 1.6;
+const TOP_Y = 17;
+const DROP = 54;
+const COLUMN_BOTTOM = -41;
+const COLUMN_TOP = 21;
+const CAMERA_PHASE = 0.72;
 
-function createInterfaceTexture(kind) {
+// Default chapters. Pass your own via options.projects (see constructor).
+// `image` is optional: a screenshot/video-poster URL. Without it a schematic
+// interface texture is drawn so the scene never shows an empty panel.
+const DEFAULT_PROJECTS = [
+  { kind: 'oms', label: 'OMS / WORKSPACE', progress: 0.34, accent: 0xd8a06f, image: null },
+  { kind: 'dafca', label: 'DAFCA / MESSAGES', progress: 0.7, accent: 0x7fc4b6, image: null }
+];
+
+const hash3 = (x, y, z) => {
+  const s = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453;
+  return s - Math.floor(s);
+};
+const valueNoise = (x, y, z) => {
+  const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
+  const xf = x - xi, yf = y - yi, zf = z - zi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf), w = zf * zf * (3 - 2 * zf);
+  const l = (a, b, t) => a + (b - a) * t;
+  return l(
+    l(l(hash3(xi, yi, zi), hash3(xi + 1, yi, zi), u), l(hash3(xi, yi + 1, zi), hash3(xi + 1, yi + 1, zi), u), v),
+    l(l(hash3(xi, yi, zi + 1), hash3(xi + 1, yi, zi + 1), u), l(hash3(xi, yi + 1, zi + 1), hash3(xi + 1, yi + 1, zi + 1), u), v),
+    w
+  );
+};
+const fbm = (x, y, z) =>
+  valueNoise(x, y, z) * 0.55 + valueNoise(x * 2.1, y * 2.1, z * 2.1) * 0.28 + valueNoise(x * 4.3, y * 4.3, z * 4.3) * 0.17;
+
+function roundedRectShape(w, h, r) {
+  const s = new THREE.Shape();
+  const x = -w / 2, y = -h / 2;
+  s.moveTo(x + r, y);
+  s.lineTo(x + w - r, y);
+  s.absarc(x + w - r, y + r, r, -Math.PI / 2, 0, false);
+  s.lineTo(x + w, y + h - r);
+  s.absarc(x + w - r, y + h - r, r, 0, Math.PI / 2, false);
+  s.lineTo(x + r, y + h);
+  s.absarc(x + r, y + h - r, r, Math.PI / 2, Math.PI, false);
+  s.lineTo(x, y + r);
+  s.absarc(x + r, y + r, r, Math.PI, Math.PI * 1.5, false);
+  return s;
+}
+
+/* Schematic fallback shown until (or unless) a real screenshot loads. */
+function createInterfaceTexture(kind, accentHex) {
   const canvas = document.createElement('canvas');
   canvas.width = 1280;
   canvas.height = 800;
-  const context = canvas.getContext('2d');
-  const accent = kind === 'oms' ? '#d8ad7c' : '#9bcabb';
+  const c = canvas.getContext('2d');
+  const accent = `#${accentHex.toString(16).padStart(6, '0')}`;
   const ink = '#edf1eb';
-  const muted = '#9ca9a0';
+  const muted = '#8f9b97';
+  const oms = kind === 'oms';
 
-  context.fillStyle = '#111916';
-  context.fillRect(0, 0, canvas.width, canvas.height);
-  context.fillStyle = '#1b2520';
-  context.fillRect(0, 0, canvas.width, 72);
-  context.fillStyle = accent;
-  context.fillRect(0, 0, 8, canvas.height);
+  c.fillStyle = '#0d1214';
+  c.fillRect(0, 0, 1280, 800);
+  c.fillStyle = '#151c1f';
+  c.fillRect(0, 0, 1280, 72);
+  c.fillStyle = accent;
+  c.fillRect(0, 0, 8, 800);
+  c.fillStyle = ink;
+  c.font = '600 25px Arial, sans-serif';
+  c.fillText(oms ? 'OMS  /  WORKSPACE' : 'DAFCA  /  MESSAGES', 38, 45);
+  c.fillStyle = muted;
+  c.font = '16px Arial, sans-serif';
+  c.fillText('PROJECT INTERFACE · SCHEMATIC', 900, 42);
 
-  context.fillStyle = ink;
-  context.font = '600 25px Arial, sans-serif';
-  context.fillText(kind === 'oms' ? 'OMS  /  WORKSPACE' : 'DAFCA  /  MESSAGES', 38, 45);
-  context.fillStyle = muted;
-  context.font = '16px Arial, sans-serif';
-  context.fillText('PROJECT INTERFACE · SCHEMATIC', 900, 42);
-
-  context.fillStyle = '#18211d';
-  context.fillRect(0, 72, 230, 728);
-  const navItems = kind === 'oms'
+  c.fillStyle = '#12191c';
+  c.fillRect(0, 72, 230, 728);
+  const nav = oms
     ? ['OVERVIEW', 'EMPLOYEES', 'ATTENDANCE', 'LEAVE', 'PAYROLL', 'ANNOUNCEMENTS', 'TICKETS']
     : ['CONVERSATIONS', 'DIRECT MESSAGES', 'CHANNELS', 'SHARED FILES', 'PEOPLE'];
-  context.font = '17px Arial, sans-serif';
-  navItems.forEach((item, index) => {
-    const y = 132 + index * 62;
-    if (index === 0) {
-      context.fillStyle = '#26342d';
-      context.fillRect(18, y - 28, 194, 42);
-      context.fillStyle = accent;
-      context.fillRect(18, y - 28, 4, 42);
+  c.font = '17px Arial, sans-serif';
+  nav.forEach((item, i) => {
+    const y = 132 + i * 62;
+    if (i === 0) {
+      c.fillStyle = '#1d282c';
+      c.fillRect(18, y - 28, 194, 42);
+      c.fillStyle = accent;
+      c.fillRect(18, y - 28, 4, 42);
     }
-    context.fillStyle = index === 0 ? ink : muted;
-    context.fillText(item, 36, y);
+    c.fillStyle = i === 0 ? ink : muted;
+    c.fillText(item, 36, y);
   });
 
-  context.fillStyle = ink;
-  context.font = '600 34px Arial, sans-serif';
-  context.fillText(kind === 'oms' ? 'People operations' : 'Team conversations', 278, 137);
-  context.fillStyle = muted;
-  context.font = '18px Arial, sans-serif';
-  context.fillText(kind === 'oms'
-    ? 'Connected modules for everyday workplace workflows'
-    : 'Persistent messages, shared files, and live collaboration', 280, 174);
+  c.fillStyle = ink;
+  c.font = '600 34px Arial, sans-serif';
+  c.fillText(oms ? 'People operations' : 'Team conversations', 278, 137);
+  c.fillStyle = muted;
+  c.font = '18px Arial, sans-serif';
+  c.fillText(oms ? 'Connected modules for everyday workplace workflows' : 'Persistent messages, shared files, live collaboration', 280, 174);
 
-  const cardY = 215;
-  const cardWidth = kind === 'oms' ? 220 : 285;
-  const cardGap = 18;
-  const cards = kind === 'oms'
-    ? ['EMPLOYEES', 'ATTENDANCE', 'LEAVE', 'PAYROLL']
-    : ['MESSAGES', 'CONVERSATIONS', 'FILES'];
-  cards.forEach((label, index) => {
-    const x = 280 + index * (cardWidth + cardGap);
-    context.fillStyle = '#1b2721';
-    context.fillRect(x, cardY, cardWidth, 110);
-    context.strokeStyle = '#35453b';
-    context.lineWidth = 2;
-    context.strokeRect(x, cardY, cardWidth, 110);
-    context.fillStyle = accent;
-    context.fillRect(x + 18, cardY + 18, 5, 72);
-    context.fillStyle = muted;
-    context.font = '15px Arial, sans-serif';
-    context.fillText('WORKFLOW', x + 36, cardY + 42);
-    context.fillStyle = ink;
-    context.font = '600 19px Arial, sans-serif';
-    context.fillText(label, x + 36, cardY + 72);
+  const cards = oms ? ['EMPLOYEES', 'ATTENDANCE', 'LEAVE', 'PAYROLL'] : ['MESSAGES', 'CONVERSATIONS', 'FILES'];
+  const cw = oms ? 220 : 285;
+  cards.forEach((label, i) => {
+    const x = 280 + i * (cw + 18);
+    c.fillStyle = '#162024';
+    c.fillRect(x, 215, cw, 110);
+    c.strokeStyle = '#2b3a40';
+    c.lineWidth = 2;
+    c.strokeRect(x, 215, cw, 110);
+    c.fillStyle = accent;
+    c.fillRect(x + 18, 233, 5, 72);
+    c.fillStyle = muted;
+    c.font = '15px Arial, sans-serif';
+    c.fillText('WORKFLOW', x + 36, 257);
+    c.fillStyle = ink;
+    c.font = '600 19px Arial, sans-serif';
+    c.fillText(label, x + 36, 287);
   });
 
-  const listTop = 355;
-  context.fillStyle = '#1b2721';
-  context.fillRect(280, listTop, 930, 388);
-  context.fillStyle = '#26342d';
-  context.fillRect(280, listTop, 930, 52);
-  context.fillStyle = accent;
-  context.font = '600 15px Arial, sans-serif';
-  context.fillText(kind === 'oms' ? 'MODULE WORKFLOWS' : 'RECENT ACTIVITY', 305, listTop + 33);
-
-  const rowLabels = kind === 'oms'
+  c.fillStyle = '#162024';
+  c.fillRect(280, 355, 930, 388);
+  c.fillStyle = '#1d282c';
+  c.fillRect(280, 355, 930, 52);
+  c.fillStyle = accent;
+  c.font = '600 15px Arial, sans-serif';
+  c.fillText(oms ? 'MODULE WORKFLOWS' : 'RECENT ACTIVITY', 305, 388);
+  const rows = oms
     ? ['Employee records', 'Time and attendance', 'Leave requests', 'Payroll workflows', 'Announcements and tickets']
     : ['Persistent conversations', 'Real-time message updates', 'Shared files', 'Conversation history', 'Backend communication APIs'];
-  rowLabels.forEach((label, index) => {
-    const y = listTop + 112 + index * 54;
-    context.strokeStyle = '#2e3b33';
-    context.lineWidth = 1;
-    context.beginPath();
-    context.moveTo(304, y + 17);
-    context.lineTo(1188, y + 17);
-    context.stroke();
-    context.fillStyle = accent;
-    context.beginPath();
-    context.arc(316, y, 6, 0, Math.PI * 2);
-    context.fill();
-    context.fillStyle = ink;
-    context.font = '18px Arial, sans-serif';
-    context.fillText(label, 338, y + 6);
-    context.fillStyle = muted;
-    context.font = '15px Arial, sans-serif';
-    context.fillText(kind === 'oms' ? 'CONNECTED MODULE' : 'REAL-TIME SYSTEM', 925, y + 6);
+  rows.forEach((label, i) => {
+    const y = 467 + i * 54;
+    c.strokeStyle = '#243037';
+    c.lineWidth = 1;
+    c.beginPath();
+    c.moveTo(304, y + 17);
+    c.lineTo(1188, y + 17);
+    c.stroke();
+    c.fillStyle = accent;
+    c.beginPath();
+    c.arc(316, y, 6, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = ink;
+    c.font = '18px Arial, sans-serif';
+    c.fillText(label, 338, y + 6);
+    c.fillStyle = muted;
+    c.font = '15px Arial, sans-serif';
+    c.fillText(oms ? 'CONNECTED MODULE' : 'REAL-TIME SYSTEM', 925, y + 6);
   });
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 4;
+  texture.anisotropy = 8;
   return texture;
 }
 
+/* ------------------------------------------------------------------ */
+/*  Shaders                                                            */
+/* ------------------------------------------------------------------ */
+
+const SCREEN_VERT = /* glsl */ `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const SCREEN_FRAG = /* glsl */ `
+  uniform sampler2D uMap;
+  uniform float uTime;
+  uniform float uVel;
+  uniform float uHover;
+  uniform float uReveal;
+  uniform float uGlitch;
+  varying vec2 vUv;
+
+  float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+
+  void main() {
+    vec2 uv = vUv;
+
+    // short horizontal tear, only while the chapter is arriving or on hover
+    float row = floor(uv.y * 34.0 + floor(uTime * 8.0));
+    float tear = step(0.965, hash(vec2(row, floor(uTime * 8.0)))) * uGlitch;
+    uv.x += tear * 0.025;
+
+    float split = 0.0012 + uVel * 0.006 + uHover * 0.004 + uGlitch * 0.004;
+    vec3 col;
+    col.r = texture2D(uMap, uv + vec2(split, 0.0)).r;
+    col.g = texture2D(uMap, uv).g;
+    col.b = texture2D(uMap, uv - vec2(split, 0.0)).b;
+
+    // fine scanline + grain, very low amplitude
+    col *= 0.96 + 0.04 * sin(uv.y * 900.0);
+    col += (hash(uv * 900.0 + uTime) - 0.5) * 0.035;
+
+    // soft edge vignette so the glass reads as lit from within
+    vec2 e = abs(uv - 0.5) * 2.0;
+    col *= 1.0 - 0.28 * smoothstep(0.55, 1.15, max(e.x, e.y));
+    col *= mix(0.78, 1.12, uHover);
+
+    gl_FragColor = vec4(col * uReveal, uReveal);
+  }
+`;
+
+const PARTICLE_VERT = /* glsl */ `
+  uniform float uTime;
+  uniform float uProgress;
+  uniform float uVel;
+  uniform float uPx;
+  attribute float aSeed;
+  varying vec3 vColor;
+  varying float vAlpha;
+
+  void main() {
+    vec3 p = position;
+    float range = 64.0;
+    float rise = uTime * (0.2 + aSeed * 0.45) + uProgress * (14.0 + aSeed * 24.0);
+    p.y = mod(p.y + 42.0 + rise, range) - 42.0;
+
+    float a = uTime * 0.025 * (aSeed - 0.5) * 2.0;
+    float s = sin(a), c = cos(a);
+    p.xz = mat2(c, -s, s, c) * p.xz;
+
+    vec4 mv = modelViewMatrix * vec4(p, 1.0);
+    gl_Position = projectionMatrix * mv;
+    gl_PointSize = uPx * (0.7 + aSeed * 1.9) * (30.0 / -mv.z) * (1.0 + uVel * 1.6);
+
+    vec3 warm = vec3(1.0, 0.52, 0.78);
+    vec3 cool = vec3(0.38, 0.82, 0.92);
+    vColor = mix(warm, cool, step(0.55, fract(aSeed * 7.31)));
+    vAlpha = 0.25 + aSeed * 0.5;
+  }
+`;
+
+const PARTICLE_FRAG = /* glsl */ `
+  varying vec3 vColor;
+  varying float vAlpha;
+  void main() {
+    float d = length(gl_PointCoord - 0.5);
+    float a = smoothstep(0.5, 0.0, d) * vAlpha;
+    gl_FragColor = vec4(vColor, a);
+  }
+`;
+
+// Final look pass: chromatic aberration that scales with scroll velocity,
+// film grain, vignette. Runs before OutputPass (tone mapping / sRGB).
+const LookShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uTime: { value: 0 },
+    uVel: { value: 0 },
+    uGrain: { value: 0.045 },
+    uAberration: { value: 0.0006 }
+  },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+  `,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse;
+    uniform float uTime;
+    uniform float uVel;
+    uniform float uGrain;
+    uniform float uAberration;
+    varying vec2 vUv;
+    float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    void main() {
+      vec2 dir = vUv - 0.5;
+      float dist = dot(dir, dir);
+      float ca = uAberration + uVel * 0.0035 * (0.4 + dist * 2.0);
+      vec3 col;
+      col.r = texture2D(tDiffuse, vUv + dir * ca).r;
+      col.g = texture2D(tDiffuse, vUv).g;
+      col.b = texture2D(tDiffuse, vUv - dir * ca).b;
+      col += (hash(vUv * vec2(1920.0, 1080.0) + fract(uTime) * 91.0) - 0.5) * uGrain;
+      col *= 1.0 - smoothstep(0.25, 0.95, dist * 1.9) * 0.55;
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `
+};
+
+/* ------------------------------------------------------------------ */
+/*  WorkWorld                                                          */
+/* ------------------------------------------------------------------ */
+
 export class WorkWorld {
-  constructor(canvas, scrollArea, getProgress) {
+  /**
+   * @param {HTMLCanvasElement} canvas
+   * @param {HTMLElement} scrollArea       kept for API compatibility
+   * @param {() => number} getProgress     scroll progress, 0..1
+   * @param {object} [options]
+   * @param {Array<{kind?:string,label?:string,progress:number,accent?:number,image?:string|null,href?:string}>} [options.projects]
+   * @param {(project:object)=>void} [options.onSelect]   called when a hovered panel is clicked
+   */
+  constructor(canvas, scrollArea, getProgress, options = {}) {
     this.canvas = canvas;
     this.scrollArea = scrollArea;
     this.getProgress = getProgress;
+    this.options = options;
+    this.projects = options.projects?.length ? options.projects : DEFAULT_PROJECTS;
+
     this.disposed = false;
-    this.progress = 0;
-    this.targetProgress = 0;
+    this.progress = clamp01(getProgress?.() ?? 0);
+    this.velocity = 0;
+    this.time = 0;
+    this.mouse = new THREE.Vector2();
+    this.mouseSmooth = new THREE.Vector2();
+    this.hoverIndex = -1;
+    this.cards = [];
+    this.textures = [];
     this.animatedLights = [];
-    this.interfaceTextures = [];
-    this.projectStations = [];
+
+    this.reducedMotionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    this.reduced = !!this.reducedMotionQuery?.matches;
+    this.compact = window.innerWidth < 768;
 
     this._animate = this._animate.bind(this);
     this._resize = this._resize.bind(this);
+    this._onPointerMove = this._onPointerMove.bind(this);
+    this._onClick = this._onClick.bind(this);
+    this._onMotionChange = e => { this.reduced = e.matches; };
+    this._onVisibility = () => { this._lastFrameTime = performance.now(); };
 
     this._init();
   }
 
   _init() {
     const bounds = this.canvas.parentElement.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, this.compact ? 1.25 : 1.75);
+
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas,
-      antialias: true,
+      antialias: false, // composer handles its own targets; bloom hides edge aliasing
       alpha: false,
       powerPreference: 'high-performance'
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.65));
+    this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(bounds.width, bounds.height, false);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.08;
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.renderer.toneMappingExposure = 1.0;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x151b17);
-    this.scene.fog = new THREE.FogExp2(0x151b17, 0.009);
+    this.scene.background = new THREE.Color(0x05070b);
+    this.scene.fog = new THREE.FogExp2(0x05070b, 0.0105);
 
-    this.camera = new THREE.PerspectiveCamera(45, bounds.width / bounds.height, 0.1, 240);
+    // Image-based light: gives the glass and iridescent hero something to reflect.
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.envTarget = pmrem.fromScene(new RoomEnvironment(), 0.04);
+    this.scene.environment = this.envTarget.texture;
+    if ('environmentIntensity' in this.scene) this.scene.environmentIntensity = 0.5;
+    pmrem.dispose();
+
+    this.camera = new THREE.PerspectiveCamera(45, bounds.width / bounds.height, 0.1, 220);
     this.camera.position.set(0, 12, 25);
 
-    this.scene.add(new THREE.HemisphereLight(0xb9c9c0, 0x28221d, 1.8));
+    this.scene.add(new THREE.HemisphereLight(0x6f7fb8, 0x1a0f22, 0.55));
 
-    const key = new THREE.DirectionalLight(0xffd6a1, 3.2);
-    key.position.set(-22, 38, 20);
-    key.castShadow = true;
-    key.shadow.mapSize.set(2048, 2048);
-    key.shadow.camera.left = -40;
-    key.shadow.camera.right = 40;
-    key.shadow.camera.top = 40;
-    key.shadow.camera.bottom = -40;
-    key.shadow.bias = -0.0005;
-    this.scene.add(key);
+    // two colored lights that travel with the camera: magenta one side, teal the other
+    this.lightA = new THREE.PointLight(0xff5fb4, 260, 46, 2);
+    this.lightB = new THREE.PointLight(0x4fd1d9, 230, 46, 2);
+    this.scene.add(this.lightA, this.lightB);
 
-    const fill = new THREE.DirectionalLight(0x93b7ad, 1.05);
-    fill.position.set(22, 5, -24);
-    this.scene.add(fill);
-
-    const haze = new THREE.PointLight(0xd47750, 58, 58, 1.8);
-    haze.position.set(4, -20, 0);
-    this.scene.add(haze);
-
-    this._buildSpiral();
-    this._buildWorldFloor();
-    this._buildOmsStation();
-    this._buildDafcaStation();
-    this._buildAtmosphere();
+    this._buildHero();
+    this._buildRings();
+    this._buildCards();
+    this._buildParticles();
+    this._buildComposer(bounds);
 
     this.resizeObserver = new ResizeObserver(this._resize);
     this.resizeObserver.observe(this.canvas.parentElement);
+    window.addEventListener('pointermove', this._onPointerMove, { passive: true });
+    window.addEventListener('click', this._onClick);
+    document.addEventListener('visibilitychange', this._onVisibility);
+    this.reducedMotionQuery?.addEventListener?.('change', this._onMotionChange);
+
     this._lastFrameTime = performance.now();
     this._animate();
   }
+
+  /* ---------- path ---------- */
 
   _path(progress, radiusOffset = 0, heightOffset = 0, phaseOffset = 0) {
     const t = clamp01(progress);
     const angle = -0.48 + t * Math.PI * 2 * WALK_TURNS + phaseOffset;
     const radius = 8.5 + radiusOffset;
-    return new THREE.Vector3(
-      Math.cos(angle) * radius,
-      17 - t * 54 + heightOffset,
-      Math.sin(angle) * radius
-    );
+    return new THREE.Vector3(Math.cos(angle) * radius, TOP_Y - t * DROP + heightOffset, Math.sin(angle) * radius);
   }
 
   _radial(progress, phaseOffset = 0) {
@@ -204,541 +409,272 @@ export class WorkWorld {
     return new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
   }
 
-  _pathCurve(radiusOffset = 0, heightOffset = 0, samples = 360, phaseOffset = 0) {
+  /* ---------- hero: one sculpted, iridescent spine ---------- */
+
+  _buildHero() {
+    const segs = this.compact ? 72 : 140;
+    const steps = this.compact ? 260 : 460;
     const points = [];
-    for (let i = 0; i <= samples; i += 1) {
-      points.push(this._path(i / samples, radiusOffset, heightOffset, phaseOffset));
+    for (let i = 0; i <= steps; i += 1) {
+      const t = i / steps;
+      const y = COLUMN_BOTTOM + t * (COLUMN_TOP - COLUMN_BOTTOM);
+      // vertebra rhythm: bulbous discs separated by narrow necks
+      const wave = Math.pow(0.5 + 0.5 * Math.sin(y * 2.35), 0.65);
+      const taper = smooth(0, 0.06, t) * smooth(1, 0.94, t);
+      const r = (0.85 + 1.25 * wave + 0.25 * Math.sin(y * 0.37)) * (0.25 + 0.75 * taper);
+      points.push(new THREE.Vector2(Math.max(0.05, r), y));
     }
-    return new THREE.CatmullRomCurve3(points, false, 'centripetal');
-  }
 
-  _material(color, roughness = 0.72, metalness = 0.08, extra = {}) {
-    return new THREE.MeshStandardMaterial({
-      color,
-      roughness,
-      metalness,
-      ...extra
-    });
-  }
-
-  _addBox(parent, size, position, material, rotationY = 0) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size), material);
-    mesh.position.set(...position);
-    mesh.rotation.y = rotationY;
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    parent.add(mesh);
-    return mesh;
-  }
-
-  _addInterfaceDisplay(parent, kind, position, width, height) {
-    const frame = new THREE.Group();
-    frame.position.set(...position);
-    parent.add(frame);
-
-    const frameMaterial = this._material(0x29332d, 0.36, 0.66);
-    const texture = createInterfaceTexture(kind);
-    this.interfaceTextures.push(texture);
-    const screenMaterial = new THREE.MeshBasicMaterial({
-      map: texture,
-      toneMapped: false
-    });
-    const back = new THREE.Mesh(
-      new THREE.BoxGeometry(width + 0.28, height + 0.28, 0.24),
-      frameMaterial
-    );
-    back.castShadow = true;
-    frame.add(back);
-
-    const screen = new THREE.Mesh(
-      new THREE.PlaneGeometry(width, height),
-      screenMaterial
-    );
-    screen.position.z = 0.13;
-    frame.add(screen);
-
-    const status = new THREE.Mesh(
-      new THREE.SphereGeometry(0.045, 12, 8),
-      new THREE.MeshBasicMaterial({ color: kind === 'oms' ? 0xd8ad7c : 0x9bcabb })
-    );
-    status.position.set(width / 2 - 0.14, height / 2 - 0.14, 0.145);
-    frame.add(status);
-    return frame;
-  }
-
-  _buildSpiral() {
-    const backboneMaterial = new THREE.MeshStandardMaterial({
-      color: 0xb8c99d,
-      emissive: 0x35472d,
-      emissiveIntensity: 0.62,
-      roughness: 0.38,
-      metalness: 0.22
-    });
-    const baseMaterials = [
-      this._material(0x9bb9a5, 0.42, 0.3, { emissive: 0x21382e, emissiveIntensity: 0.4 }),
-      this._material(0xd1b187, 0.42, 0.3, { emissive: 0x48301c, emissiveIntensity: 0.36 })
-    ];
-    const curve = this._pathCurve(0, 0, 520);
-    const backbone = new THREE.Mesh(
-      new THREE.TubeGeometry(curve, 520, 0.17, 10, false),
-      backboneMaterial
-    );
-    backbone.castShadow = true;
-    this.scene.add(backbone);
-
-    const baseGeometry = new THREE.CylinderGeometry(0.045, 0.045, 1, 8);
-    const nodeGeometry = new THREE.SphereGeometry(0.18, 10, 8);
-    for (let i = 2; i < 72; i += 2) {
-      const progress = i / 74;
-      const start = this._path(progress);
-      const end = this._path(progress, -1.65);
-      const direction = end.clone().sub(start);
-      const base = new THREE.Mesh(baseGeometry, baseMaterials[(i / 2) % 2]);
-      base.position.copy(start).add(end).multiplyScalar(0.5);
-      base.scale.y = direction.length();
-      base.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
-      this.scene.add(base);
-
-      const node = new THREE.Mesh(nodeGeometry, backboneMaterial);
-      node.position.copy(start);
-      this.scene.add(node);
+    let geo = new THREE.LatheGeometry(points, segs);
+    const pos = geo.attributes.position;
+    const v = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i += 1) {
+      v.fromBufferAttribute(pos, i);
+      const radial = Math.hypot(v.x, v.z) || 1;
+      const nx = v.x / radial, nz = v.z / radial;
+      // organic lumps + a slow lateral drift so the column is never a perfect cylinder
+      const lump = (fbm(v.x * 0.55 + 3.1, v.y * 0.42, v.z * 0.55 - 1.7) - 0.42) * 1.9;
+      const ridge = Math.pow(Math.abs(Math.sin(Math.atan2(v.z, v.x) * 3 + v.y * 0.9)), 6) * 0.38;
+      const d = lump + ridge;
+      v.x += nx * d + Math.sin(v.y * 0.21) * 0.55;
+      v.z += nz * d + Math.cos(v.y * 0.17) * 0.55;
+      pos.setXYZ(i, v.x, v.y, v.z);
     }
+    geo.deleteAttribute('uv');
+    geo.deleteAttribute('normal');
+    geo = mergeVertices(geo, 1e-4);
+    geo.computeVertexNormals();
+
+    this.heroMaterial = new THREE.MeshPhysicalMaterial({
+      color: 0x0a0d14,
+      metalness: 0.92,
+      roughness: 0.2,
+      clearcoat: 1,
+      clearcoatRoughness: 0.12,
+      iridescence: 1,
+      iridescenceIOR: 1.55,
+      iridescenceThicknessRange: [180, 720],
+      envMapIntensity: 1.5,
+      side: THREE.DoubleSide
+    });
+    this.hero = new THREE.Mesh(geo, this.heroMaterial);
+    this.scene.add(this.hero);
   }
 
-  _buildWorldFloor() {
-    const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(240, 240),
-      this._material(0x202923, 0.95)
-    );
-    floor.rotation.x = -Math.PI / 2;
-    floor.position.y = -38.5;
-    floor.receiveShadow = true;
-    this.scene.add(floor);
-
-    const groundRings = [19, 29, 42, 58];
-    groundRings.forEach((radius, index) => {
+  /* thin orbiting rings: lets the eye read the vertical travel */
+  _buildRings() {
+    const group = new THREE.Group();
+    const count = this.compact ? 9 : 16;
+    for (let i = 0; i < count; i += 1) {
+      const t = (i + 0.5) / count;
+      const warm = i % 2 === 0;
       const ring = new THREE.Mesh(
-        new THREE.TorusGeometry(radius, 0.035, 4, 180),
+        new THREE.TorusGeometry(3.6 + (i % 4) * 0.55, 0.028, 6, 160),
         new THREE.MeshBasicMaterial({
-          color: index % 2 ? 0x586b5c : 0x88664e,
+          color: warm ? 0xff7fc4 : 0x62e0e6,
           transparent: true,
-          opacity: 0.24 - index * 0.035
+          opacity: 0.55,
+          fog: true
         })
       );
-      ring.rotation.x = Math.PI / 2;
-      ring.position.y = -38.35 + index * 0.012;
-      this.scene.add(ring);
-    });
-
-    const stone = this._material(0x374239, 0.92);
-    for (let i = 0; i < 34; i += 1) {
-      const angle = i * 2.399;
-      const radius = 13 + (i % 6) * 2.2;
-      const height = 1.1 + (i % 5) * 0.62;
-      const boulder = new THREE.Mesh(
-        new THREE.DodecahedronGeometry(0.55 + (i % 4) * 0.22, 1),
-        stone
-      );
-      boulder.position.set(Math.cos(angle) * radius, -38 + height * 0.3, Math.sin(angle) * radius);
-      boulder.scale.set(1.4, height, 0.9);
-      boulder.rotation.set(angle * 0.2, angle, angle * 0.07);
-      boulder.castShadow = true;
-      boulder.receiveShadow = true;
-      this.scene.add(boulder);
+      ring.position.y = COLUMN_BOTTOM + 4 + t * (COLUMN_TOP - COLUMN_BOTTOM - 8);
+      ring.rotation.set(Math.PI / 2 + Math.sin(i * 1.7) * 0.28, 0, Math.cos(i * 2.3) * 0.28);
+      ring.userData.spin = (i % 2 ? 1 : -1) * (0.04 + (i % 3) * 0.02);
+      group.add(ring);
     }
-  }
-
-  _makeStation(progress, accent) {
-    const position = this._path(progress, -3, 0, 0.72);
-    const group = new THREE.Group();
-    group.position.copy(position);
-    group.userData.chapterProgress = progress;
-    group.userData.baseScale = 0.78;
-    group.scale.setScalar(group.userData.baseScale);
-    const radial = this._radial(progress, 0.72);
-    group.rotation.y = Math.atan2(radial.x, radial.z);
+    this.rings = group;
     this.scene.add(group);
-    this.projectStations.push(group);
+  }
 
-    const platformShape = new THREE.Shape();
-    platformShape.moveTo(-8, -5.8);
-    platformShape.lineTo(-5.8, -8);
-    platformShape.lineTo(5.8, -8);
-    platformShape.lineTo(8, -5.8);
-    platformShape.lineTo(8, 5.8);
-    platformShape.lineTo(5.8, 8);
-    platformShape.lineTo(-5.8, 8);
-    platformShape.lineTo(-8, 5.8);
-    platformShape.closePath();
-    const platformGeometry = new THREE.ExtrudeGeometry(platformShape, {
-      depth: 0.72,
-      bevelEnabled: true,
-      bevelSegments: 2,
-      bevelSize: 0.12,
-      bevelThickness: 0.08
-    });
-    platformGeometry.rotateX(-Math.PI / 2);
-    const base = new THREE.Mesh(platformGeometry, this._material(0x586257, 0.78, 0.18));
-    base.position.y = -0.36;
-    base.castShadow = true;
-    base.receiveShadow = true;
-    group.add(base);
+  /* ---------- project panels ---------- */
 
-    const deckShape = new THREE.Shape();
-    deckShape.moveTo(-7.45, -5.45);
-    deckShape.lineTo(-5.45, -7.45);
-    deckShape.lineTo(5.45, -7.45);
-    deckShape.lineTo(7.45, -5.45);
-    deckShape.lineTo(7.45, 5.45);
-    deckShape.lineTo(5.45, 7.45);
-    deckShape.lineTo(-5.45, 7.45);
-    deckShape.lineTo(-7.45, 5.45);
-    deckShape.closePath();
-    const deckGeometry = new THREE.ExtrudeGeometry(deckShape, { depth: 0.13, bevelEnabled: false });
-    deckGeometry.rotateX(-Math.PI / 2);
-    const deck = new THREE.Mesh(deckGeometry, this._material(0x929284, 0.84, 0.12));
-    deck.position.y = 0.37;
-    deck.receiveShadow = true;
-    group.add(deck);
+  _buildCards() {
+    const width = 6.6;
+    const height = 4.125; // 16:10
+    const loader = new THREE.TextureLoader();
 
-    const deckEdge = new THREE.MeshStandardMaterial({
-      color: accent,
-      emissive: accent,
-      emissiveIntensity: 0.28,
-      roughness: 0.46,
-      metalness: 0.34
-    });
-    [
-      [[-6.2, 0.51, -7.18], [12.4, 0.08, 0.1]],
-      [[-6.2, 0.51, 7.18], [12.4, 0.08, 0.1]],
-      [[-7.18, 0.51, -6.2], [0.1, 0.08, 12.4]],
-      [[7.18, 0.51, -6.2], [0.1, 0.08, 12.4]]
-    ].forEach(([[x, y, z], size]) => {
-      const strip = new THREE.Mesh(new THREE.BoxGeometry(...size), deckEdge);
-      strip.position.set(x, y, z);
-      group.add(strip);
-    });
+    this.projects.forEach((project, index) => {
+      const accent = project.accent ?? 0x7fc4b6;
+      const group = new THREE.Group();
+      const phase = CAMERA_PHASE + (index % 2 ? 0.1 : -0.1);
+      const radial = this._radial(project.progress, phase);
+      group.position.copy(this._path(project.progress, -2.6, 2.1, phase));
+      group.rotation.y = Math.atan2(radial.x, radial.z);
+      group.userData = { project, index, progress: project.progress, base: 1 };
+      this.scene.add(group);
 
-    const approach = new THREE.Mesh(
-      new THREE.BoxGeometry(5.15, 0.28, 18.4),
-      this._material(0x777d70, 0.88, 0.08)
-    );
-    approach.position.set(0, 0.36, -16.25);
-    approach.receiveShadow = true;
-    group.add(approach);
-
-    const approachEdge = this._material(0x444c43, 0.62, 0.28);
-    [-2.48, 2.48].forEach(x => {
-      const edge = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.2, 18.2), approachEdge);
-      edge.position.set(x, 0.55, -16.25);
-      group.add(edge);
-    });
-
-    const supportMaterial = this._material(0x434c44, 0.7, 0.34);
-    const floorY = -38.5 - group.position.y;
-    [-6.45, 6.45].forEach(x => {
-      [-3.8, 3.8].forEach(z => {
-        const top = -0.72;
-        const length = top - floorY;
-        const pier = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.28, 0.52, length, 8),
-          supportMaterial
-        );
-        pier.position.set(x, floorY + length / 2, z);
-        pier.castShadow = true;
-        pier.receiveShadow = true;
-        group.add(pier);
-
-        const footing = new THREE.Mesh(
-          new THREE.BoxGeometry(1.4, 0.28, 1.4),
-          supportMaterial
-        );
-        footing.position.set(x, floorY + 0.14, z);
-        footing.castShadow = true;
-        group.add(footing);
+      // glass-and-metal frame
+      const frameShape = roundedRectShape(width + 0.34, height + 0.34, 0.5);
+      const frameGeo = new THREE.ExtrudeGeometry(frameShape, {
+        depth: 0.2,
+        bevelEnabled: true,
+        bevelThickness: 0.06,
+        bevelSize: 0.06,
+        bevelSegments: 3,
+        curveSegments: 14
       });
-    });
-
-    const hub = new THREE.Mesh(
-      new THREE.CylinderGeometry(1.1, 1.35, 1.55, 10),
-      this._material(0x69776b, 0.52, 0.24)
-    );
-    hub.position.y = 0.94;
-    hub.castShadow = true;
-    hub.receiveShadow = true;
-    group.add(hub);
-
-    const hubTop = new THREE.Mesh(
-      new THREE.CylinderGeometry(1.14, 1.14, 0.12, 32),
-      new THREE.MeshStandardMaterial({
-        color: accent,
-        emissive: accent,
-        emissiveIntensity: 0.28,
-        roughness: 0.42,
-        metalness: 0.3
-      })
-    );
-    hubTop.position.y = 1.76;
-    group.add(hubTop);
-
-    return group;
-  }
-
-  _addStationTree(group, x, z, size, tint) {
-    const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.09 * size, 0.15 * size, 1.25 * size, 8),
-      this._material(0x5c4938)
-    );
-    trunk.position.set(x, 0.77 * size, z);
-    group.add(trunk);
-
-    const crown = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(0.6 * size, 2),
-      this._material(tint, 0.9)
-    );
-    crown.position.set(x, 1.52 * size, z);
-    crown.scale.set(0.94, 1.16, 0.94);
-    crown.castShadow = true;
-    group.add(crown);
-  }
-
-  _buildOmsStation() {
-    const group = this._makeStation(0.34, 0xb87a52);
-    const stone = this._material(0x9b927d, 0.86);
-    const glass = this._material(0x536e65, 0.3, 0.34, {
-      emissive: 0x14231d,
-      emissiveIntensity: 0.32
-    });
-    const trim = this._material(0x363d35, 0.5, 0.38);
-    const glazing = this._material(0xe0bb87, 0.36, 0.2, {
-      emissive: 0x8c5934,
-      emissiveIntensity: 0.55
-    });
-    const buildings = [
-      { x: -2.8, z: -1.45, w: 3.5, d: 2.65, h: 4.6, material: glass },
-      { x: 2.05, z: -1.6, w: 2.25, d: 2.5, h: 3.3, material: stone },
-      { x: -2.6, z: 2.1, w: 2.45, d: 2.15, h: 2.75, material: stone },
-      { x: 2.1, z: 2.0, w: 2.75, d: 2.2, h: 3.55, material: glass }
-    ];
-
-    buildings.forEach(building => {
-      const { x, z, w, d, h } = building;
-      this._addBox(group, [w, h, d], [x, h / 2 + 0.16, z], building.material);
-      this._addBox(group, [w + 0.18, 0.18, d + 0.18], [x, h + 0.16, z], trim);
-      this._addBox(group, [w + 0.32, 0.12, d + 0.32], [x, 0.22, z], stone);
-
-      const floors = Math.max(2, Math.floor(h / 1.05));
-      const panes = Math.max(3, Math.floor(w / 0.48));
-      for (let floor = 0; floor < floors; floor += 1) {
-        const y = 0.68 + floor * 1.03;
-        for (let pane = 0; pane < panes; pane += 1) {
-          const paneX = x - w / 2 + ((pane + 0.5) * w) / panes;
-          const paneWidth = (w / panes) * 0.58;
-          this._addBox(
-            group,
-            [paneWidth, 0.48, 0.045],
-            [paneX, y, z + d / 2 + 0.028],
-            pane % 4 === 1 && floor % 2 === 0 ? glazing : glass
-          );
-          this._addBox(
-            group,
-            [0.045, 0.48, (d / 3) * 0.58],
-            [x + w / 2 + 0.028, y, z - d / 2 + ((pane % 3) + 0.5) * d / 3],
-            pane % 3 === 0 ? glazing : glass
-          );
-        }
-        this._addBox(group, [w + 0.06, 0.055, 0.07], [x, y + 0.31, z + d / 2 + 0.035], stone);
-      }
-    });
-
-    const entry = new THREE.Group();
-    entry.position.set(-0.35, 0, 2.25);
-    group.add(entry);
-    this._addBox(entry, [2.5, 0.16, 1.5], [0, 2.45, 0.2], trim);
-    this._addBox(entry, [1.85, 2.2, 0.16], [0, 1.24, 0], glass);
-    this._addBox(entry, [0.055, 2.0, 0.06], [0, 1.2, 0.1], glazing);
-    [-1.05, 1.05].forEach(x => this._addBox(entry, [0.12, 2.35, 0.14], [x, 1.18, 0.24], stone));
-
-    const interfaceDisplay = this._addInterfaceDisplay(group, 'oms', [0, 3.5, 4.3], 5.1, 3.18);
-    interfaceDisplay.rotation.y = -0.08;
-
-    const plaza = this._material(0xb1a58d, 0.92);
-    this._addBox(group, [0.62, 0.04, 8.3], [-0.35, 0.08, 0], plaza);
-    this._addBox(group, [9.8, 0.04, 0.62], [0, 0.08, 0], plaza);
-    for (let i = 0; i < 8; i += 1) {
-      const post = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.035, 0.05, 1.7, 8),
-        trim
+      frameGeo.translate(0, 0, -0.34);
+      const frame = new THREE.Mesh(
+        frameGeo,
+        new THREE.MeshPhysicalMaterial({
+          color: new THREE.Color(accent).multiplyScalar(0.22),
+          metalness: 0.75,
+          roughness: 0.24,
+          clearcoat: 1,
+          clearcoatRoughness: 0.1,
+          iridescence: 1,
+          iridescenceIOR: 1.5,
+          iridescenceThicknessRange: [200, 640],
+          envMapIntensity: 1.3
+        })
       );
-      const angle = i * Math.PI / 4;
-      post.position.set(Math.cos(angle) * 5.2, 0.88, Math.sin(angle) * 5.2);
-      group.add(post);
-      const lamp = new THREE.Mesh(
-        new THREE.SphereGeometry(0.13, 12, 8),
-        glazing
-      );
-      lamp.position.set(post.position.x, 1.78, post.position.z);
-      group.add(lamp);
-    }
+      group.add(frame);
 
-    [[-5.45, -4.15], [5.2, -4.0], [-5.25, 4.3], [5.25, 4.1]].forEach((point, index) => {
-      this._addStationTree(group, point[0], point[1], index % 2 ? 1.05 : 0.82, index % 2 ? 0x647052 : 0x7b7960);
-    });
+      // screen: rounded plane with real project art, RGB-split on scroll velocity
+      const screenGeo = new THREE.ShapeGeometry(roundedRectShape(width, height, 0.42), 16);
+      const sp = screenGeo.attributes.position;
+      const uv = screenGeo.attributes.uv;
+      for (let i = 0; i < sp.count; i += 1) uv.setXY(i, sp.getX(i) / width + 0.5, sp.getY(i) / height + 0.5);
+      uv.needsUpdate = true;
 
-    const warmLight = new THREE.PointLight(0xe0a66a, 33, 23, 1.5);
-    warmLight.position.copy(group.position).add(new THREE.Vector3(-2, 8, 4));
-    this.scene.add(warmLight);
-    this.animatedLights.push(warmLight);
-  }
-
-  _buildDafcaStation() {
-    const group = this._makeStation(0.7, 0x7faea2);
-    const frameMat = this._material(0xc0b7a1, 0.38, 0.48);
-    const glassMat = this._material(0x436b65, 0.26, 0.38, {
-      transparent: true,
-      opacity: 0.86,
-      emissive: 0x102d2a,
-      emissiveIntensity: 0.58
-    });
-    const bubbleMat = new THREE.MeshStandardMaterial({
-      color: 0xb6d4c0,
-      emissive: 0x477a66,
-      emissiveIntensity: 0.78,
-      roughness: 0.35,
-      metalness: 0.12
-    });
-    const connectionPoints = [
-      new THREE.Vector3(-3.9, 3.0, -1.8),
-      new THREE.Vector3(0, 4.5, -2.8),
-      new THREE.Vector3(3.8, 3.25, -1.3),
-      new THREE.Vector3(-2.7, 2.7, 2.1),
-      new THREE.Vector3(2.65, 3.4, 2.15)
-    ];
-    const core = new THREE.Group();
-    core.position.set(0, 1.3, 0);
-    group.add(core);
-
-    this._addBox(core, [3.7, 0.2, 3.3], [0, 0, 0], frameMat);
-    this._addBox(core, [3.35, 1.65, 0.12], [0, 0.88, -1.58], glassMat);
-    this._addBox(core, [3.35, 0.12, 0.18], [0, 1.77, -1.58], frameMat);
-    this._addBox(core, [3.35, 0.12, 0.18], [0, 0.02, -1.58], frameMat);
-    [-1.68, -0.57, 0.57, 1.68].forEach(x => {
-      this._addBox(core, [0.1, 1.75, 0.18], [x, 0.88, -1.58], frameMat);
-    });
-
-    const addMessagePanel = (point, index) => {
-      const panel = new THREE.Group();
-      panel.position.copy(point);
-      panel.rotation.y = Math.atan2(point.x, point.z) * 0.62;
-      group.add(panel);
-      const width = index === 1 ? 2.5 : 2.05;
-      const height = index === 1 ? 1.72 : 1.4;
-      this._addBox(panel, [width + 0.2, height + 0.2, 0.16], [0, 0, 0], frameMat);
-      this._addBox(panel, [width, height, 0.13], [0, 0, 0.1], glassMat);
-      this._addBox(panel, [width * 0.72, 0.09, 0.035], [-width * 0.06, height * 0.3, 0.18], bubbleMat);
-      this._addBox(panel, [width * 0.48, 0.085, 0.035], [width * 0.2, height * 0.08, 0.18], frameMat);
-      this._addBox(panel, [width * 0.66, 0.09, 0.035], [-width * 0.04, -height * 0.15, 0.18], bubbleMat);
-      this._addBox(panel, [width * 0.28, 0.045, 0.035], [-width * 0.24, -height * 0.36, 0.18], frameMat);
-      const status = new THREE.Mesh(
-        new THREE.SphereGeometry(0.065, 10, 8),
-        bubbleMat
-      );
-      status.position.set(-width * 0.38, height * 0.37, 0.2);
-      panel.add(status);
-    };
-    connectionPoints.forEach(addMessagePanel);
-
-    connectionPoints.forEach((point, index) => {
-      const next = connectionPoints[(index + 1) % connectionPoints.length];
-      const curve = new THREE.CatmullRomCurve3([
-        point,
-        point.clone().lerp(next, 0.35).add(new THREE.Vector3(0, 1.1, 0)),
-        point.clone().lerp(next, 0.72).add(new THREE.Vector3(0, 0.9, 0)),
-        next
-      ]);
-      group.add(new THREE.Mesh(
-        new THREE.TubeGeometry(curve, 28, 0.035, 6, false),
-        bubbleMat
-      ));
-    });
-
-    const archive = new THREE.Group();
-    archive.position.set(0, 1.55, 0.2);
-    group.add(archive);
-    for (let i = 0; i < 4; i += 1) {
-      const fileCard = this._addBox(
-        archive,
-        [1.65, 0.11, 1.95],
-        [0, i * 0.2, 0],
-        i % 2 ? glassMat : frameMat
-      );
-      fileCard.rotation.y = (i - 1.5) * 0.055;
-    }
-    for (let i = 0; i < 3; i += 1) {
-      this._addBox(
-        archive,
-        [0.78 - i * 0.1, 0.035, 0.045],
-        [-0.22, 0.13 + i * 0.2, 1.01],
-        bubbleMat
-      );
-    }
-
-    const archiveArch = new THREE.Mesh(
-      new THREE.TorusGeometry(2.35, 0.075, 8, 80, Math.PI),
-      frameMat
-    );
-    archiveArch.position.set(0, 0.16, 0.15);
-    archiveArch.rotation.z = Math.PI;
-    group.add(archiveArch);
-
-    const interfaceDisplay = this._addInterfaceDisplay(group, 'dafca', [0, 4.25, 4.1], 5.35, 3.34);
-    interfaceDisplay.rotation.y = 0.08;
-
-    const coolLight = new THREE.PointLight(0x87bdac, 36, 25, 1.5);
-    coolLight.position.copy(group.position).add(new THREE.Vector3(0, 8, 3));
-    this.scene.add(coolLight);
-    this.animatedLights.push(coolLight);
-    this.animatedCore = core;
-  }
-
-  _buildAtmosphere() {
-    const count = 480;
-    const positions = new Float32Array(count * 3);
-    const colors = new Float32Array(count * 3);
-    const warm = new THREE.Color(0xd1a27a);
-    const cool = new THREE.Color(0x92b2a5);
-    this.particleOffsets = new Float32Array(count);
-
-    for (let i = 0; i < count; i += 1) {
-      const t = Math.random();
-      const angle = Math.random() * Math.PI * 2;
-      const radius = 10 + Math.random() * 19;
-      positions[i * 3] = Math.cos(angle) * radius;
-      positions[i * 3 + 1] = 17 - t * 54 + (Math.random() - 0.5) * 4;
-      positions[i * 3 + 2] = Math.sin(angle) * radius;
-      const color = i % 3 ? warm : cool;
-      colors[i * 3] = color.r;
-      colors[i * 3 + 1] = color.g;
-      colors[i * 3 + 2] = color.b;
-      this.particleOffsets[i] = Math.random() * Math.PI * 2;
-    }
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    this.particles = new THREE.Points(
-      geometry,
-      new THREE.PointsMaterial({
-        size: 0.085,
-        vertexColors: true,
+      const fallback = createInterfaceTexture(project.kind ?? 'oms', accent);
+      this.textures.push(fallback);
+      const material = new THREE.ShaderMaterial({
+        uniforms: {
+          uMap: { value: fallback },
+          uTime: { value: 0 },
+          uVel: { value: 0 },
+          uHover: { value: 0 },
+          uReveal: { value: 0 },
+          uGlitch: { value: 0 }
+        },
+        vertexShader: SCREEN_VERT,
+        fragmentShader: SCREEN_FRAG,
         transparent: true,
-        opacity: 0.55,
-        sizeAttenuation: true,
-        depthWrite: false
-      })
-    );
+        fog: false
+      });
+      if (project.image) {
+        loader.load(
+          project.image,
+          tex => {
+            if (this.disposed) { tex.dispose(); return; }
+            tex.colorSpace = THREE.SRGBColorSpace;
+            tex.anisotropy = 8;
+            this.textures.push(tex);
+            material.uniforms.uMap.value = tex;
+          },
+          undefined,
+          () => { /* keep the schematic fallback */ }
+        );
+      }
+      const screen = new THREE.Mesh(screenGeo, material);
+      screen.position.z = 0.02;
+      group.add(screen);
+
+      // soft glow plate behind the panel, picked up by bloom
+      const glow = new THREE.Mesh(
+        new THREE.PlaneGeometry(width * 1.35, height * 1.5),
+        new THREE.MeshBasicMaterial({
+          color: accent,
+          transparent: true,
+          opacity: 0.0,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending
+        })
+      );
+      glow.position.z = -0.7;
+      group.add(glow);
+
+      this.cards.push({ group, screen, material, glow, project, reveal: 0, hover: 0, arrived: 0 });
+    });
+  }
+
+  /* ---------- GPU particles ---------- */
+
+  _buildParticles() {
+    const count = this.compact ? 420 : 1100;
+    const positions = new Float32Array(count * 3);
+    const seeds = new Float32Array(count);
+    for (let i = 0; i < count; i += 1) {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 5 + Math.pow(Math.random(), 0.7) * 26;
+      positions[i * 3] = Math.cos(angle) * radius;
+      positions[i * 3 + 1] = -42 + Math.random() * 64;
+      positions[i * 3 + 2] = Math.sin(angle) * radius;
+      seeds[i] = Math.random();
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1));
+    this.particleMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uProgress: { value: 0 },
+        uVel: { value: 0 },
+        uPx: { value: this.renderer.getPixelRatio() }
+      },
+      vertexShader: PARTICLE_VERT,
+      fragmentShader: PARTICLE_FRAG,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    });
+    this.particles = new THREE.Points(geo, this.particleMaterial);
+    this.particles.frustumCulled = false;
     this.scene.add(this.particles);
-    this._particlePositions = positions;
+  }
+
+  /* ---------- post-processing ---------- */
+
+  _buildComposer(bounds) {
+    this.composer = new EffectComposer(this.renderer);
+    this.composer.setPixelRatio(this.renderer.getPixelRatio());
+    this.composer.setSize(bounds.width, bounds.height);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+
+    this.bloom = new UnrealBloomPass(
+      new THREE.Vector2(bounds.width, bounds.height),
+      this.compact ? 0.35 : 0.6, // strength
+      0.7,                       // radius
+      0.82                       // threshold: only the brightest edges glow
+    );
+    this.composer.addPass(this.bloom);
+
+    this.lookPass = new ShaderPass(LookShader);
+    this.composer.addPass(this.lookPass);
+    this.composer.addPass(new OutputPass());
+  }
+
+  /* ---------- interaction ---------- */
+
+  _onPointerMove(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    this._pointer = {
+      x: ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      y: -(((e.clientY - rect.top) / rect.height) * 2 - 1)
+    };
+    this.mouse.set(this._pointer.x, this._pointer.y);
+  }
+
+  _onClick() {
+    if (this.hoverIndex < 0) return;
+    const project = this.cards[this.hoverIndex]?.project;
+    if (!project) return;
+    if (this.options.onSelect) this.options.onSelect(project);
+    else if (project.href) window.open(project.href, '_blank', 'noopener');
+  }
+
+  _updateHover() {
+    if (!this._pointer) return;
+    this._raycaster ||= new THREE.Raycaster();
+    this._raycaster.setFromCamera(this._pointer, this.camera);
+    const targets = this.cards.filter(c => c.reveal > 0.5).map(c => c.screen);
+    const hit = this._raycaster.intersectObjects(targets, false)[0];
+    const next = hit ? this.cards.findIndex(c => c.screen === hit.object) : -1;
+    if (next !== this.hoverIndex) {
+      this.hoverIndex = next;
+      this.canvas.style.cursor = next >= 0 ? 'pointer' : '';
+    }
   }
 
   _resize() {
@@ -748,7 +684,11 @@ export class WorkWorld {
     this.camera.aspect = bounds.width / bounds.height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(bounds.width, bounds.height, false);
+    this.composer.setSize(bounds.width, bounds.height);
+    this.bloom.setSize(bounds.width, bounds.height);
   }
+
+  /* ---------- frame loop ---------- */
 
   _animate() {
     if (this.disposed) return;
@@ -757,39 +697,83 @@ export class WorkWorld {
     const now = performance.now();
     const delta = Math.min((now - this._lastFrameTime) / 1000, 0.05);
     this._lastFrameTime = now;
-    this.targetProgress = clamp01(this.getProgress());
-    this.progress = this.targetProgress;
+    if (!this.reduced) this.time += delta;
 
-    const cameraRadiusOffset = 11;
-    const cameraHeight = 7;
-    const walkPosition = this._path(this.progress, cameraRadiusOffset, cameraHeight, 0.72);
-    const focus = new THREE.Vector3(0, 17 - this.progress * 54, 0);
+    // damped scroll: the camera glides to where the page is, it doesn't snap
+    const target = clamp01(this.getProgress());
+    const prev = this.progress;
+    this.progress += (target - prev) * (this.reduced ? 1 : 1 - Math.exp(-delta * 3.4));
+    const rawVel = delta > 0 ? Math.abs(this.progress - prev) / delta : 0;
+    const wantedVel = this.reduced ? 0 : Math.min(rawVel * 5, 1.4);
+    this.velocity += (wantedVel - this.velocity) * (1 - Math.exp(-delta * 6));
 
-    this.camera.position.copy(walkPosition);
+    // pointer parallax (smoothed, off for reduced motion)
+    const m = this.reduced ? new THREE.Vector2() : this.mouse;
+    this.mouseSmooth.lerp(m, 1 - Math.exp(-delta * 3));
+
+    const p = this.progress;
+    const radial = this._radial(p, CAMERA_PHASE);
+    const tangent = new THREE.Vector3(-radial.z, 0, radial.x);
+    const cam = this._path(p, 11, 7, CAMERA_PHASE);
+    cam.addScaledVector(tangent, this.mouseSmooth.x * 1.5);
+    cam.y += this.mouseSmooth.y * 0.9;
+    const focus = new THREE.Vector3(0, TOP_Y - p * DROP, 0);
+    focus.addScaledVector(tangent, -this.mouseSmooth.x * 0.5);
+    this.camera.position.copy(cam);
     this.camera.lookAt(focus);
 
-    this.projectStations.forEach(station => {
-      const distance = Math.abs(this.progress - station.userData.chapterProgress);
-      const reveal = THREE.MathUtils.clamp((0.26 - distance) / 0.12, 0, 1);
-      const easedReveal = reveal * reveal * (3 - 2 * reveal);
-      station.visible = easedReveal > 0.01;
-      station.scale.setScalar(station.userData.baseScale * easedReveal);
+    // the two accent lights ride along with the camera
+    this.lightA.position.copy(focus).addScaledVector(radial, 8).addScaledVector(tangent, 6).add(new THREE.Vector3(0, 4, 0));
+    this.lightB.position.copy(focus).addScaledVector(radial, 8).addScaledVector(tangent, -6).add(new THREE.Vector3(0, -2, 0));
+    const breathe = this.reduced ? 0 : Math.sin(this.time * 0.8) * 22;
+    this.lightA.intensity = 260 + breathe;
+    this.lightB.intensity = 230 - breathe;
+
+    this._updateHover();
+
+    this.cards.forEach(card => {
+      const dist = Math.abs(p - card.group.userData.progress);
+      const reveal = smooth(0.0, 1.0, clamp01((0.24 - dist) / 0.11));
+      const wasHidden = card.reveal < 0.02;
+      card.reveal = reveal;
+      card.group.visible = reveal > 0.005;
+      card.group.scale.setScalar(0.82 + 0.18 * reveal);
+
+      // brief glitch burst when a chapter arrives
+      if (wasHidden && reveal > 0.02 && !this.reduced) card.arrived = 1;
+      card.arrived = Math.max(0, card.arrived - delta * 1.8);
+
+      const isHover = this.cards[this.hoverIndex] === card;
+      card.hover += ((isHover ? 1 : 0) - card.hover) * (1 - Math.exp(-delta * 8));
+
+      const u = card.material.uniforms;
+      u.uTime.value = this.time;
+      u.uVel.value = this.velocity;
+      u.uHover.value = card.hover;
+      u.uReveal.value = reveal;
+      u.uGlitch.value = Math.max(card.arrived, card.hover * 0.15);
+      card.glow.material.opacity = reveal * (0.05 + card.hover * 0.06);
+
+      // slow float so panels feel suspended, not placed
+      const float = this.reduced ? 0 : Math.sin(this.time * 0.6 + card.group.userData.index * 2) * 0.1;
+      card.group.children[0].position.y = float;
+      card.screen.position.y = float;
     });
 
-    if (this.animatedCore) {
-      this.animatedCore.rotation.y += delta * 0.14;
-    }
-    this.animatedLights?.forEach((light, index) => {
-      light.intensity = (index ? 27 : 19) + Math.sin(now * 0.00075 + index * 1.7) * 2.2;
-    });
+    this.heroMaterial.iridescenceThicknessRange = [180 + Math.sin(this.time * 0.15) * 40, 720];
+    this.rings.children.forEach(r => { r.rotation.z += r.userData.spin * delta * (this.reduced ? 0 : 1 + this.velocity * 4); });
 
-    for (let i = 0; i < this.particleOffsets.length; i += 1) {
-      const index = i * 3;
-      this._particlePositions[index + 1] += delta * (0.11 + (i % 4) * 0.018);
-      if (this._particlePositions[index + 1] > 19) this._particlePositions[index + 1] = -39;
-    }
-    this.particles.geometry.attributes.position.needsUpdate = true;
-    this.renderer.render(this.scene, this.camera);
+    const pu = this.particleMaterial.uniforms;
+    pu.uTime.value = this.time;
+    pu.uProgress.value = p;
+    pu.uVel.value = this.velocity;
+
+    const lu = this.lookPass.uniforms;
+    lu.uTime.value = this.time;
+    lu.uVel.value = this.velocity;
+    lu.uGrain.value = this.reduced ? 0.02 : 0.045;
+
+    this.composer.render(delta);
   }
 
   dispose() {
@@ -797,12 +781,19 @@ export class WorkWorld {
     this.disposed = true;
     cancelAnimationFrame(this.frameId);
     this.resizeObserver?.disconnect();
+    window.removeEventListener('pointermove', this._onPointerMove);
+    window.removeEventListener('click', this._onClick);
+    document.removeEventListener('visibilitychange', this._onVisibility);
+    this.reducedMotionQuery?.removeEventListener?.('change', this._onMotionChange);
+    this.canvas.style.cursor = '';
     this.scene.traverse(object => {
       object.geometry?.dispose();
-      if (Array.isArray(object.material)) object.material.forEach(material => material.dispose());
+      if (Array.isArray(object.material)) object.material.forEach(m => m.dispose());
       else object.material?.dispose();
     });
-    this.interfaceTextures.forEach(texture => texture.dispose());
+    this.textures.forEach(t => t.dispose());
+    this.envTarget?.dispose();
+    this.composer?.dispose();
     this.renderer.dispose();
   }
 }
