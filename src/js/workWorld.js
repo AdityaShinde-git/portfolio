@@ -24,12 +24,12 @@ const COLUMN_BOTTOM = -41;
 const COLUMN_TOP = 21;
 const CAMERA_PHASE = 0.72;
 
-// Default chapters. Pass your own via options.projects (see constructor).
-// `image` is optional: a screenshot/video-poster URL. Without it a schematic
-// interface texture is drawn so the scene never shows an empty panel.
+const ACCENTS = [0x5fd0e0, 0x7fb4ff, 0xe0a860, 0x6fe0c0, 0x9fbcd8, 0xf2c66b];
+
+// Used only if no projects are passed. Real usage: options.projects.
 const DEFAULT_PROJECTS = [
-  { kind: 'oms', label: 'OMS / WORKSPACE', progress: 0.34, accent: 0xd8a06f, image: null },
-  { kind: 'dafca', label: 'DAFCA / MESSAGES', progress: 0.7, accent: 0x7fc4b6, image: null }
+  { title: 'Project one', subtitle: 'Selected work', period: '2025', tech: ['THREE.JS'], progress: 0.34 },
+  { title: 'Project two', subtitle: 'Selected work', period: '2025', tech: ['NODE'], progress: 0.7 }
 ];
 
 const hash3 = (x, y, z) => {
@@ -50,117 +50,130 @@ const valueNoise = (x, y, z) => {
 const fbm = (x, y, z) =>
   valueNoise(x, y, z) * 0.55 + valueNoise(x * 2.1, y * 2.1, z * 2.1) * 0.28 + valueNoise(x * 4.3, y * 4.3, z * 4.3) * 0.17;
 
-function roundedRectShape(w, h, r) {
-  const s = new THREE.Shape();
+/* Clipped-corner (chamfer) outline: the HUD-glass silhouette. */
+function chamferShape(w, h, c) {
   const x = -w / 2, y = -h / 2;
-  s.moveTo(x + r, y);
-  s.lineTo(x + w - r, y);
-  s.absarc(x + w - r, y + r, r, -Math.PI / 2, 0, false);
-  s.lineTo(x + w, y + h - r);
-  s.absarc(x + w - r, y + h - r, r, 0, Math.PI / 2, false);
-  s.lineTo(x + r, y + h);
-  s.absarc(x + r, y + h - r, r, Math.PI / 2, Math.PI, false);
-  s.lineTo(x, y + r);
-  s.absarc(x + r, y + r, r, Math.PI, Math.PI * 1.5, false);
+  const s = new THREE.Shape();
+  s.moveTo(x + c, y);
+  s.lineTo(x + w - c, y);
+  s.lineTo(x + w, y + c);
+  s.lineTo(x + w, y + h - c);
+  s.lineTo(x + w - c, y + h);
+  s.lineTo(x + c, y + h);
+  s.lineTo(x, y + h - c);
+  s.lineTo(x, y + c);
+  s.closePath();
   return s;
 }
 
-/* Schematic fallback shown until (or unless) a real screenshot loads. */
-function createInterfaceTexture(kind, accentHex) {
+function wrapLines(c, text, maxW, maxLines) {
+  const words = String(text).split(' ');
+  const lines = [];
+  let line = '';
+  for (const w of words) {
+    const t = line ? `${line} ${w}` : w;
+    if (c.measureText(t).width > maxW && line) { lines.push(line); line = w; } else line = t;
+  }
+  if (line) lines.push(line);
+  if (lines.length > maxLines) {
+    lines.length = maxLines;
+    lines[maxLines - 1] = lines[maxLines - 1].replace(/.{0,2}$/, '…');
+  }
+  return lines;
+}
+
+/*
+ * Generated panel art, used when a project has no screenshot (and while one
+ * loads). Big outlined index, wrapped title, period, tech chips, grid, scan bars.
+ */
+function createPanelTexture(project, index, total, accentHex) {
+  const W = 1280, H = 800;
   const canvas = document.createElement('canvas');
-  canvas.width = 1280;
-  canvas.height = 800;
+  canvas.width = W;
+  canvas.height = H;
   const c = canvas.getContext('2d');
   const accent = `#${accentHex.toString(16).padStart(6, '0')}`;
-  const ink = '#edf1eb';
-  const muted = '#8f9b97';
-  const oms = kind === 'oms';
+  const mono = '"JetBrains Mono","SF Mono",Menlo,Consolas,"Courier New",monospace';
+  const pad2 = v => String(v).padStart(2, '0');
 
-  c.fillStyle = '#0d1214';
-  c.fillRect(0, 0, 1280, 800);
-  c.fillStyle = '#151c1f';
-  c.fillRect(0, 0, 1280, 72);
+  const bg = c.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, '#0a0e14');
+  bg.addColorStop(1, '#10181d');
+  c.fillStyle = bg;
+  c.fillRect(0, 0, W, H);
+
+  const glow = c.createRadialGradient(W * 0.8, H * 0.18, 0, W * 0.8, H * 0.18, 700);
+  glow.addColorStop(0, `${accent}55`);
+  glow.addColorStop(1, '#00000000');
+  c.fillStyle = glow;
+  c.fillRect(0, 0, W, H);
+
+  c.strokeStyle = 'rgba(255,255,255,0.05)';
+  c.lineWidth = 1;
+  for (let x = 0; x <= W; x += 64) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, H); c.stroke(); }
+  for (let y = 0; y <= H; y += 64) { c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke(); }
+
+  // seeded scan bars
+  for (let i = 0; i < 9; i += 1) {
+    const r = Math.abs(Math.sin((index + 1) * 12.9898 + i * 78.233));
+    c.fillStyle = `rgba(255,255,255,${0.025 + (r % 0.04)})`;
+    c.fillRect(0, (r * 977) % H, W, 2 + (r * 40) % 10);
+  }
+
+  // outlined index
+  c.font = `700 380px ${mono}`;
+  c.textBaseline = 'alphabetic';
+  c.lineWidth = 2;
+  c.strokeStyle = `${accent}66`;
+  c.strokeText(pad2(index + 1), 700, 700);
+
+  // top meta
   c.fillStyle = accent;
-  c.fillRect(0, 0, 8, 800);
-  c.fillStyle = ink;
-  c.font = '600 25px Arial, sans-serif';
-  c.fillText(oms ? 'OMS  /  WORKSPACE' : 'DAFCA  /  MESSAGES', 38, 45);
-  c.fillStyle = muted;
-  c.font = '16px Arial, sans-serif';
-  c.fillText('PROJECT INTERFACE · SCHEMATIC', 900, 42);
+  c.font = `600 20px ${mono}`;
+  c.fillText(`PROJECT ${pad2(index + 1)} / ${pad2(total)}`, 80, 96);
+  c.fillStyle = '#8f98a8';
+  c.textAlign = 'right';
+  c.fillText(String(project.period || '').toUpperCase(), W - 80, 96);
+  c.textAlign = 'left';
 
-  c.fillStyle = '#12191c';
-  c.fillRect(0, 72, 230, 728);
-  const nav = oms
-    ? ['OVERVIEW', 'EMPLOYEES', 'ATTENDANCE', 'LEAVE', 'PAYROLL', 'ANNOUNCEMENTS', 'TICKETS']
-    : ['CONVERSATIONS', 'DIRECT MESSAGES', 'CHANNELS', 'SHARED FILES', 'PEOPLE'];
-  c.font = '17px Arial, sans-serif';
-  nav.forEach((item, i) => {
-    const y = 132 + i * 62;
-    if (i === 0) {
-      c.fillStyle = '#1d282c';
-      c.fillRect(18, y - 28, 194, 42);
-      c.fillStyle = accent;
-      c.fillRect(18, y - 28, 4, 42);
-    }
-    c.fillStyle = i === 0 ? ink : muted;
-    c.fillText(item, 36, y);
-  });
+  // title
+  c.fillStyle = '#eef2f6';
+  c.font = `700 84px ${mono}`;
+  const title = String(project.title ?? project.label ?? 'UNTITLED').toUpperCase();
+  const lines = wrapLines(c, title, 1000, 3);
+  lines.forEach((l, i) => c.fillText(l, 80, 300 + i * 100));
 
-  c.fillStyle = ink;
-  c.font = '600 34px Arial, sans-serif';
-  c.fillText(oms ? 'People operations' : 'Team conversations', 278, 137);
-  c.fillStyle = muted;
-  c.font = '18px Arial, sans-serif';
-  c.fillText(oms ? 'Connected modules for everyday workplace workflows' : 'Persistent messages, shared files, live collaboration', 280, 174);
+  // subtitle
+  c.fillStyle = '#8f98a8';
+  c.font = `500 24px ${mono}`;
+  const sub = wrapLines(c, String(project.subtitle || '').toUpperCase(), 1000, 1)[0] || '';
+  c.fillText(sub, 80, 300 + lines.length * 100 + 10);
 
-  const cards = oms ? ['EMPLOYEES', 'ATTENDANCE', 'LEAVE', 'PAYROLL'] : ['MESSAGES', 'CONVERSATIONS', 'FILES'];
-  const cw = oms ? 220 : 285;
-  cards.forEach((label, i) => {
-    const x = 280 + i * (cw + 18);
-    c.fillStyle = '#162024';
-    c.fillRect(x, 215, cw, 110);
-    c.strokeStyle = '#2b3a40';
-    c.lineWidth = 2;
-    c.strokeRect(x, 215, cw, 110);
-    c.fillStyle = accent;
-    c.fillRect(x + 18, 233, 5, 72);
-    c.fillStyle = muted;
-    c.font = '15px Arial, sans-serif';
-    c.fillText('WORKFLOW', x + 36, 257);
-    c.fillStyle = ink;
-    c.font = '600 19px Arial, sans-serif';
-    c.fillText(label, x + 36, 287);
-  });
+  // tech chips
+  let cx = 80;
+  c.font = `600 17px ${mono}`;
+  for (const t of (project.tech || []).slice(0, 8)) {
+    const label = String(t).toUpperCase();
+    const w = c.measureText(label).width + 28;
+    if (cx + w > W - 80) break;
+    c.strokeStyle = `${accent}99`;
+    c.lineWidth = 1.5;
+    c.strokeRect(cx, H - 120, w, 38);
+    c.fillStyle = '#d6dce4';
+    c.fillText(label, cx + 14, H - 95);
+    cx += w + 12;
+  }
 
-  c.fillStyle = '#162024';
-  c.fillRect(280, 355, 930, 388);
-  c.fillStyle = '#1d282c';
-  c.fillRect(280, 355, 930, 52);
-  c.fillStyle = accent;
-  c.font = '600 15px Arial, sans-serif';
-  c.fillText(oms ? 'MODULE WORKFLOWS' : 'RECENT ACTIVITY', 305, 388);
-  const rows = oms
-    ? ['Employee records', 'Time and attendance', 'Leave requests', 'Payroll workflows', 'Announcements and tickets']
-    : ['Persistent conversations', 'Real-time message updates', 'Shared files', 'Conversation history', 'Backend communication APIs'];
-  rows.forEach((label, i) => {
-    const y = 467 + i * 54;
-    c.strokeStyle = '#243037';
-    c.lineWidth = 1;
+  // corner brackets
+  c.strokeStyle = accent;
+  c.lineWidth = 3;
+  const b = 34, m = 30;
+  [[m, m, 1, 1], [W - m, m, -1, 1], [m, H - m, 1, -1], [W - m, H - m, -1, -1]].forEach(([x, y, sx, sy]) => {
     c.beginPath();
-    c.moveTo(304, y + 17);
-    c.lineTo(1188, y + 17);
+    c.moveTo(x, y + sy * b);
+    c.lineTo(x, y);
+    c.lineTo(x + sx * b, y);
     c.stroke();
-    c.fillStyle = accent;
-    c.beginPath();
-    c.arc(316, y, 6, 0, Math.PI * 2);
-    c.fill();
-    c.fillStyle = ink;
-    c.font = '18px Arial, sans-serif';
-    c.fillText(label, 338, y + 6);
-    c.fillStyle = muted;
-    c.font = '15px Arial, sans-serif';
-    c.fillText(oms ? 'CONNECTED MODULE' : 'REAL-TIME SYSTEM', 925, y + 6);
   });
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -173,6 +186,182 @@ function createInterfaceTexture(kind, accentHex) {
 /*  Shaders                                                            */
 /* ------------------------------------------------------------------ */
 
+function fitText(c, text, maxW) {
+  let t = String(text);
+  if (c.measureText(t).width <= maxW) return t;
+  while (t.length > 1 && c.measureText(`${t}…`).width > maxW) t = t.slice(0, -1);
+  return `${t}…`;
+}
+
+/*
+ * Beat-driven art for the focused panel. While a case study is open the panel
+ * stops being a poster and becomes the exhibit:
+ *   kind 'areas' → a module map (hub + labelled nodes, active node lit)
+ *   kind 'list'  → a minimap of the current section with the active row lit
+ */
+function drawStudyTexture(canvas, project, index, total, accentHex, state) {
+  const W = canvas.width, H = canvas.height;
+  const c = canvas.getContext('2d');
+  const accent = `#${accentHex.toString(16).padStart(6, '0')}`;
+  const mono = '"JetBrains Mono","SF Mono",Menlo,Consolas,"Courier New",monospace';
+  const pad2 = v => String(v).padStart(2, '0');
+  c.textAlign = 'left';
+  c.textBaseline = 'alphabetic';
+  c.clearRect(0, 0, W, H);
+
+  const bg = c.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, '#0a0e14');
+  bg.addColorStop(1, '#10181d');
+  c.fillStyle = bg;
+  c.fillRect(0, 0, W, H);
+  const glow = c.createRadialGradient(W * 0.8, H * 0.18, 0, W * 0.8, H * 0.18, 700);
+  glow.addColorStop(0, `${accent}44`);
+  glow.addColorStop(1, '#00000000');
+  c.fillStyle = glow;
+  c.fillRect(0, 0, W, H);
+  c.strokeStyle = 'rgba(255,255,255,0.045)';
+  c.lineWidth = 1;
+  for (let x = 0; x <= W; x += 64) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, H); c.stroke(); }
+  for (let y = 0; y <= H; y += 64) { c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke(); }
+
+  // header
+  c.fillStyle = accent;
+  c.font = `600 20px ${mono}`;
+  c.fillText(`CASE STUDY ${pad2(index + 1)} / ${pad2(total)}`, 80, 96);
+  c.fillStyle = '#8f98a8';
+  c.textAlign = 'right';
+  c.fillText(`${pad2(state.beat)} / ${pad2(state.beats)}`, W - 80, 96);
+  c.textAlign = 'left';
+  c.fillStyle = '#eef2f6';
+  c.font = `700 30px ${mono}`;
+  c.fillText(String(state.section).toUpperCase(), 80, 158);
+
+  const items = state.items || [];
+  const active = state.active ?? 0;
+
+  if (state.kind === 'areas') {
+    const k = Math.max(1, items.length);
+    const hx = W / 2, hy = 480, rx = 380, ry = 200;
+    const nodes = items.map((label, i) => {
+      const a = -Math.PI / 2 + (i / k) * Math.PI * 2;
+      c.font = `600 19px ${mono}`;
+      const text = fitText(c, String(label).toUpperCase(), 300);
+      const w = c.measureText(text).width + 32;
+      const x = Math.max(80 + w / 2, Math.min(W - 80 - w / 2, hx + Math.cos(a) * rx));
+      const y = hy + Math.sin(a) * ry;
+      return { text, w, x, y };
+    });
+    nodes.forEach((n, i) => {
+      const on = i === active;
+      c.strokeStyle = on ? accent : 'rgba(255,255,255,0.14)';
+      c.lineWidth = on ? 3 : 1.5;
+      c.shadowColor = on ? accent : 'transparent';
+      c.shadowBlur = on ? 18 : 0;
+      c.beginPath(); c.moveTo(hx, hy); c.lineTo(n.x, n.y); c.stroke();
+      c.shadowBlur = 0;
+    });
+    c.fillStyle = '#0b1016';
+    c.strokeStyle = accent;
+    c.lineWidth = 2.5;
+    c.beginPath(); c.arc(hx, hy, 46, 0, Math.PI * 2); c.fill(); c.stroke();
+    c.fillStyle = accent;
+    c.font = `700 17px ${mono}`;
+    c.textAlign = 'center';
+    c.fillText('CORE', hx, hy + 6);
+    nodes.forEach((n, i) => {
+      const on = i === active;
+      c.fillStyle = '#0b1016';
+      c.fillRect(n.x - n.w / 2, n.y - 22, n.w, 44);
+      if (on) { c.fillStyle = `${accent}33`; c.fillRect(n.x - n.w / 2, n.y - 22, n.w, 44); }
+      c.strokeStyle = on ? accent : 'rgba(255,255,255,0.28)';
+      c.lineWidth = on ? 3 : 1.5;
+      c.shadowColor = on ? accent : 'transparent';
+      c.shadowBlur = on ? 22 : 0;
+      c.strokeRect(n.x - n.w / 2, n.y - 22, n.w, 44);
+      c.shadowBlur = 0;
+      c.fillStyle = on ? '#ffffff' : '#8f98a8';
+      c.font = `600 19px ${mono}`;
+      c.fillText(n.text, n.x, n.y + 7);
+    });
+    c.textAlign = 'left';
+  } else {
+    // outlined step numeral behind the rows
+    c.font = `700 340px ${mono}`;
+    c.lineWidth = 2;
+    c.strokeStyle = `${accent}38`;
+    c.strokeText(pad2(active + 1), 800, 700);
+
+    const rows = 7;
+    const start = Math.max(0, Math.min(active - 3, Math.max(0, items.length - rows)));
+    for (let r = 0; r < rows && start + r < items.length; r += 1) {
+      const i = start + r;
+      const y = 215 + r * 72;
+      const on = i === active;
+      if (on) {
+        c.fillStyle = `${accent}22`;
+        c.fillRect(80, y, W - 160, 56);
+        c.fillStyle = accent;
+        c.fillRect(80, y, 6, 56);
+      }
+      c.fillStyle = on ? accent : '#566070';
+      c.font = `600 22px ${mono}`;
+      c.fillText(pad2(i + 1), 108, y + 36);
+      c.fillStyle = on ? '#eef2f6' : '#6c7686';
+      c.font = `${on ? 600 : 500} 20px ${mono}`;
+      c.fillText(fitText(c, String(items[i]).toUpperCase(), 900), 176, y + 35);
+      if (on) {
+        c.fillStyle = accent;
+        c.textAlign = 'right';
+        c.font = `700 24px ${mono}`;
+        c.fillText(state.symbol || '>', W - 108, y + 36);
+        c.textAlign = 'left';
+      }
+    }
+  }
+
+  // progress segments
+  const steps = Math.max(1, items.length);
+  const segGap = 8;
+  const segW = (W - 160 - segGap * (steps - 1)) / steps;
+  for (let i = 0; i < steps; i += 1) {
+    c.fillStyle = i <= active ? accent : 'rgba(255,255,255,0.14)';
+    c.fillRect(80 + i * (segW + segGap), H - 70, segW, 6);
+  }
+
+  // corner brackets
+  c.strokeStyle = accent;
+  c.lineWidth = 3;
+  const b = 34, m = 30;
+  [[m, m, 1, 1], [W - m, m, -1, 1], [m, H - m, 1, -1], [W - m, H - m, -1, -1]].forEach(([x, y, sx, sy]) => {
+    c.beginPath();
+    c.moveTo(x, y + sy * b);
+    c.lineTo(x, y);
+    c.lineTo(x + sx * b, y);
+    c.stroke();
+  });
+}
+
+/* Soft radial falloff used for the glow behind each panel (no hard rectangle). */
+function createGlowTexture() {
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const c = canvas.getContext('2d');
+  c.fillStyle = '#000';
+  c.fillRect(0, 0, size, size);
+  const g = c.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  g.addColorStop(0, '#ffffff');
+  g.addColorStop(0.3, '#8a8a8a');
+  g.addColorStop(0.65, '#1c1c1c');
+  g.addColorStop(1, '#000000');
+  c.fillStyle = g;
+  c.fillRect(0, 0, size, size);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 const SCREEN_VERT = /* glsl */ `
   varying vec2 vUv;
   void main() {
@@ -183,6 +372,7 @@ const SCREEN_VERT = /* glsl */ `
 
 const SCREEN_FRAG = /* glsl */ `
   uniform sampler2D uMap;
+  uniform vec3 uAccent;
   uniform float uTime;
   uniform float uVel;
   uniform float uHover;
@@ -195,7 +385,6 @@ const SCREEN_FRAG = /* glsl */ `
   void main() {
     vec2 uv = vUv;
 
-    // short horizontal tear, only while the chapter is arriving or on hover
     float row = floor(uv.y * 34.0 + floor(uTime * 8.0));
     float tear = step(0.965, hash(vec2(row, floor(uTime * 8.0)))) * uGlitch;
     uv.x += tear * 0.025;
@@ -206,11 +395,13 @@ const SCREEN_FRAG = /* glsl */ `
     col.g = texture2D(uMap, uv).g;
     col.b = texture2D(uMap, uv - vec2(split, 0.0)).b;
 
-    // fine scanline + grain, very low amplitude
     col *= 0.96 + 0.04 * sin(uv.y * 900.0);
-    col += (hash(uv * 900.0 + uTime) - 0.5) * 0.035;
+    col += (hash(uv * 900.0 + uTime) - 0.5) * 0.016;
 
-    // soft edge vignette so the glass reads as lit from within
+    // a bright scan sweep that crosses the glass while hovered
+    float sweep = exp(-pow((fract(uTime * 0.35) - uv.y) * 14.0, 2.0));
+    col += uAccent * 0.28 * uHover * sweep;
+
     vec2 e = abs(uv - 0.5) * 2.0;
     col *= 1.0 - 0.28 * smoothstep(0.55, 1.15, max(e.x, e.y));
     col *= mix(0.78, 1.12, uHover);
@@ -242,7 +433,7 @@ const PARTICLE_VERT = /* glsl */ `
     gl_Position = projectionMatrix * mv;
     gl_PointSize = uPx * (0.7 + aSeed * 1.9) * (30.0 / -mv.z) * (1.0 + uVel * 1.6);
 
-    vec3 warm = vec3(1.0, 0.52, 0.78);
+    vec3 warm = vec3(1.0, 0.66, 0.3);
     vec3 cool = vec3(0.38, 0.82, 0.92);
     vColor = mix(warm, cool, step(0.55, fract(aSeed * 7.31)));
     vAlpha = 0.25 + aSeed * 0.5;
@@ -259,14 +450,12 @@ const PARTICLE_FRAG = /* glsl */ `
   }
 `;
 
-// Final look pass: chromatic aberration that scales with scroll velocity,
-// film grain, vignette. Runs before OutputPass (tone mapping / sRGB).
 const LookShader = {
   uniforms: {
     tDiffuse: { value: null },
     uTime: { value: 0 },
     uVel: { value: 0 },
-    uGrain: { value: 0.045 },
+    uGrain: { value: 0.028 },
     uAberration: { value: 0.0006 }
   },
   vertexShader: /* glsl */ `
@@ -303,11 +492,14 @@ const LookShader = {
 export class WorkWorld {
   /**
    * @param {HTMLCanvasElement} canvas
-   * @param {HTMLElement} scrollArea       kept for API compatibility
+   * @param {HTMLElement} scrollArea       receives the pointer cursor; sits above the canvas
    * @param {() => number} getProgress     scroll progress, 0..1
    * @param {object} [options]
-   * @param {Array<{kind?:string,label?:string,progress:number,accent?:number,image?:string|null,href?:string}>} [options.projects]
-   * @param {(project:object)=>void} [options.onSelect]   called when a hovered panel is clicked
+   * @param {Array<{title?:string,subtitle?:string,period?:string,tech?:string[],progress:number,accent?:number,image?:string|null,href?:string}>} [options.projects]
+   *   `progress` is the scroll position (0..1) at which that project is centred.
+   * @param {(project:object, index:number)=>void} [options.onSelect]  panel clicked
+   *
+   * Public: setFocus(index | -1) flies a panel to the camera (case-study view).
    */
   constructor(canvas, scrollArea, getProgress, options = {}) {
     this.canvas = canvas;
@@ -316,6 +508,12 @@ export class WorkWorld {
     this.options = options;
     this.projects = options.projects?.length ? options.projects : DEFAULT_PROJECTS;
 
+    // how wide each panel's visibility window is, relative to how tightly they're packed
+    const ps = this.projects.map(p => p.progress).sort((a, b) => a - b);
+    let gap = 0.5;
+    for (let i = 1; i < ps.length; i += 1) gap = Math.min(gap, ps[i] - ps[i - 1]);
+    this.span = Math.max(0.05, Math.min(0.26, gap * 0.62));
+
     this.disposed = false;
     this.progress = clamp01(getProgress?.() ?? 0);
     this.velocity = 0;
@@ -323,9 +521,14 @@ export class WorkWorld {
     this.mouse = new THREE.Vector2();
     this.mouseSmooth = new THREE.Vector2();
     this.hoverIndex = -1;
+    this.focusIndex = -1;
     this.cards = [];
     this.textures = [];
-    this.animatedLights = [];
+
+    this._tmpA = new THREE.Vector3();
+    this._tmpB = new THREE.Vector3();
+    this._tmpC = new THREE.Vector3();
+    this._target = new THREE.Vector3();
 
     this.reducedMotionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)');
     this.reduced = !!this.reducedMotionQuery?.matches;
@@ -341,13 +544,15 @@ export class WorkWorld {
     this._init();
   }
 
+  _cursorTarget() { return this.scrollArea || this.canvas; }
+
   _init() {
     const bounds = this.canvas.parentElement.getBoundingClientRect();
     const dpr = Math.min(window.devicePixelRatio || 1, this.compact ? 1.25 : 1.75);
 
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas,
-      antialias: false, // composer handles its own targets; bloom hides edge aliasing
+      antialias: false,
       alpha: false,
       powerPreference: 'high-performance'
     });
@@ -358,10 +563,9 @@ export class WorkWorld {
     this.renderer.toneMappingExposure = 1.0;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x05070b);
-    this.scene.fog = new THREE.FogExp2(0x05070b, 0.0105);
+    this.scene.background = new THREE.Color(0x040a10);
+    this.scene.fog = new THREE.FogExp2(0x040a10, 0.0105);
 
-    // Image-based light: gives the glass and iridescent hero something to reflect.
     const pmrem = new THREE.PMREMGenerator(this.renderer);
     this.envTarget = pmrem.fromScene(new RoomEnvironment(), 0.04);
     this.scene.environment = this.envTarget.texture;
@@ -371,10 +575,9 @@ export class WorkWorld {
     this.camera = new THREE.PerspectiveCamera(45, bounds.width / bounds.height, 0.1, 220);
     this.camera.position.set(0, 12, 25);
 
-    this.scene.add(new THREE.HemisphereLight(0x6f7fb8, 0x1a0f22, 0.55));
+    this.scene.add(new THREE.HemisphereLight(0x5f8aa8, 0x081016, 0.55));
 
-    // two colored lights that travel with the camera: magenta one side, teal the other
-    this.lightA = new THREE.PointLight(0xff5fb4, 260, 46, 2);
+    this.lightA = new THREE.PointLight(0x3f8cff, 260, 46, 2);
     this.lightB = new THREE.PointLight(0x4fd1d9, 230, 46, 2);
     this.scene.add(this.lightA, this.lightB);
 
@@ -409,7 +612,7 @@ export class WorkWorld {
     return new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
   }
 
-  /* ---------- hero: one sculpted, iridescent spine ---------- */
+  /* ---------- hero ---------- */
 
   _buildHero() {
     const segs = this.compact ? 72 : 140;
@@ -418,7 +621,6 @@ export class WorkWorld {
     for (let i = 0; i <= steps; i += 1) {
       const t = i / steps;
       const y = COLUMN_BOTTOM + t * (COLUMN_TOP - COLUMN_BOTTOM);
-      // vertebra rhythm: bulbous discs separated by narrow necks
       const wave = Math.pow(0.5 + 0.5 * Math.sin(y * 2.35), 0.65);
       const taper = smooth(0, 0.06, t) * smooth(1, 0.94, t);
       const r = (0.85 + 1.25 * wave + 0.25 * Math.sin(y * 0.37)) * (0.25 + 0.75 * taper);
@@ -432,7 +634,6 @@ export class WorkWorld {
       v.fromBufferAttribute(pos, i);
       const radial = Math.hypot(v.x, v.z) || 1;
       const nx = v.x / radial, nz = v.z / radial;
-      // organic lumps + a slow lateral drift so the column is never a perfect cylinder
       const lump = (fbm(v.x * 0.55 + 3.1, v.y * 0.42, v.z * 0.55 - 1.7) - 0.42) * 1.9;
       const ridge = Math.pow(Math.abs(Math.sin(Math.atan2(v.z, v.x) * 3 + v.y * 0.9)), 6) * 0.38;
       const d = lump + ridge;
@@ -451,9 +652,9 @@ export class WorkWorld {
       roughness: 0.2,
       clearcoat: 1,
       clearcoatRoughness: 0.12,
-      iridescence: 1,
-      iridescenceIOR: 1.55,
-      iridescenceThicknessRange: [180, 720],
+      iridescence: 0.55,
+      iridescenceIOR: 1.4,
+      iridescenceThicknessRange: [100, 420],
       envMapIntensity: 1.5,
       side: THREE.DoubleSide
     });
@@ -461,7 +662,6 @@ export class WorkWorld {
     this.scene.add(this.hero);
   }
 
-  /* thin orbiting rings: lets the eye read the vertical travel */
   _buildRings() {
     const group = new THREE.Group();
     const count = this.compact ? 9 : 16;
@@ -471,7 +671,7 @@ export class WorkWorld {
       const ring = new THREE.Mesh(
         new THREE.TorusGeometry(3.6 + (i % 4) * 0.55, 0.028, 6, 160),
         new THREE.MeshBasicMaterial({
-          color: warm ? 0xff7fc4 : 0x62e0e6,
+          color: warm ? 0x7fb4ff : 0x62e0e6,
           transparent: true,
           opacity: 0.55,
           fog: true
@@ -492,56 +692,66 @@ export class WorkWorld {
     const width = 6.6;
     const height = 4.125; // 16:10
     const loader = new THREE.TextureLoader();
+    const total = this.projects.length;
+    this.glowTex = createGlowTexture();
+    this.textures.push(this.glowTex);
 
     this.projects.forEach((project, index) => {
-      const accent = project.accent ?? 0x7fc4b6;
+      const accent = project.accent ?? ACCENTS[index % ACCENTS.length];
+      const accentColor = new THREE.Color(accent);
       const group = new THREE.Group();
       const phase = CAMERA_PHASE + (index % 2 ? 0.1 : -0.1);
       const radial = this._radial(project.progress, phase);
       group.position.copy(this._path(project.progress, -2.6, 2.1, phase));
       group.rotation.y = Math.atan2(radial.x, radial.z);
-      group.userData = { project, index, progress: project.progress, base: 1 };
+      const basePos = group.position.clone();
+      const baseQuat = group.quaternion.clone();
       this.scene.add(group);
 
-      // glass-and-metal frame
-      const frameShape = roundedRectShape(width + 0.34, height + 0.34, 0.5);
-      const frameGeo = new THREE.ExtrudeGeometry(frameShape, {
+      // everything that floats lives in `body`, so the group itself stays free to be flown around
+      const body = new THREE.Group();
+      group.add(body);
+
+      // glass-and-metal chamfered frame
+      const frameGeo = new THREE.ExtrudeGeometry(chamferShape(width + 0.34, height + 0.34, 0.5), {
         depth: 0.2,
         bevelEnabled: true,
         bevelThickness: 0.06,
         bevelSize: 0.06,
-        bevelSegments: 3,
-        curveSegments: 14
+        bevelSegments: 3
       });
       frameGeo.translate(0, 0, -0.34);
       const frame = new THREE.Mesh(
         frameGeo,
         new THREE.MeshPhysicalMaterial({
-          color: new THREE.Color(accent).multiplyScalar(0.22),
+          color: accentColor.clone().multiplyScalar(0.22),
           metalness: 0.75,
           roughness: 0.24,
           clearcoat: 1,
           clearcoatRoughness: 0.1,
-          iridescence: 1,
-          iridescenceIOR: 1.5,
-          iridescenceThicknessRange: [200, 640],
+          iridescence: 0.5,
+          iridescenceIOR: 1.4,
+          iridescenceThicknessRange: [100, 380],
           envMapIntensity: 1.3
         })
       );
-      group.add(frame);
+      body.add(frame);
 
-      // screen: rounded plane with real project art, RGB-split on scroll velocity
-      const screenGeo = new THREE.ShapeGeometry(roundedRectShape(width, height, 0.42), 16);
+      // screen
+      const screenGeo = new THREE.ShapeGeometry(chamferShape(width, height, 0.4));
       const sp = screenGeo.attributes.position;
       const uv = screenGeo.attributes.uv;
       for (let i = 0; i < sp.count; i += 1) uv.setXY(i, sp.getX(i) / width + 0.5, sp.getY(i) / height + 0.5);
       uv.needsUpdate = true;
 
-      const fallback = createInterfaceTexture(project.kind ?? 'oms', accent);
+      const fallback = createPanelTexture(project, index, total, accent);
       this.textures.push(fallback);
+      // base art (generated or screenshot) vs. the beat-driven texture used during a case study
+      const art = { base: fallback, dyn: null, canvas: null, showingDyn: false };
       const material = new THREE.ShaderMaterial({
         uniforms: {
           uMap: { value: fallback },
+          uAccent: { value: accentColor.clone() },
           uTime: { value: 0 },
           uVel: { value: 0 },
           uHover: { value: 0 },
@@ -561,31 +771,45 @@ export class WorkWorld {
             tex.colorSpace = THREE.SRGBColorSpace;
             tex.anisotropy = 8;
             this.textures.push(tex);
-            material.uniforms.uMap.value = tex;
+            art.base = tex;
+            if (!art.showingDyn) material.uniforms.uMap.value = tex;
           },
           undefined,
-          () => { /* keep the schematic fallback */ }
+          () => { /* keep generated art */ }
         );
       }
       const screen = new THREE.Mesh(screenGeo, material);
       screen.position.z = 0.02;
-      group.add(screen);
+      body.add(screen);
 
-      // soft glow plate behind the panel, picked up by bloom
+      // HDR accent outline: >1.0 colour so bloom picks it up
+      const outlinePts = chamferShape(width + 0.12, height + 0.12, 0.43).getPoints().map(p => new THREE.Vector3(p.x, p.y, 0.04));
+      const outline = new THREE.LineLoop(
+        new THREE.BufferGeometry().setFromPoints(outlinePts),
+        new THREE.LineBasicMaterial({ color: accentColor.clone().multiplyScalar(2.6), transparent: true, opacity: 0, fog: false })
+      );
+      body.add(outline);
+
+      // glow plate
       const glow = new THREE.Mesh(
-        new THREE.PlaneGeometry(width * 1.35, height * 1.5),
+        new THREE.PlaneGeometry(width * 2.1, height * 2.4),
         new THREE.MeshBasicMaterial({
+          map: this.glowTex,
           color: accent,
           transparent: true,
-          opacity: 0.0,
+          opacity: 0,
           depthWrite: false,
           blending: THREE.AdditiveBlending
         })
       );
       glow.position.z = -0.7;
-      group.add(glow);
+      body.add(glow);
 
-      this.cards.push({ group, screen, material, glow, project, reveal: 0, hover: 0, arrived: 0 });
+      this.cards.push({
+        group, body, screen, material, glow, outline, project, index,
+        progress: project.progress, basePos, baseQuat,
+        reveal: 0, hover: 0, arrived: 0, focus: 0, kick: 0, accent, art
+      });
     });
   }
 
@@ -634,9 +858,9 @@ export class WorkWorld {
 
     this.bloom = new UnrealBloomPass(
       new THREE.Vector2(bounds.width, bounds.height),
-      this.compact ? 0.35 : 0.6, // strength
-      0.7,                       // radius
-      0.82                       // threshold: only the brightest edges glow
+      this.compact ? 0.35 : 0.6,
+      0.7,
+      0.82
     );
     this.composer.addPass(this.bloom);
 
@@ -647,6 +871,49 @@ export class WorkWorld {
 
   /* ---------- interaction ---------- */
 
+  setFocus(index) {
+    this.focusIndex = Number.isInteger(index) && index >= 0 && index < this.cards.length ? index : -1;
+    if (this.focusIndex >= 0) {
+      this.hoverIndex = -1;
+      this._cursorTarget().style.cursor = '';
+    }
+  }
+
+  /**
+   * Swap a panel between its base art and beat-driven art.
+   * state: null → base art; {kind:'areas'|'list', section, items, active, symbol?, beat, beats} → drawn art.
+   * direction nudges the panel (±1) and `quiet` skips the glitch cut (for timer-driven changes).
+   */
+  setPanelState(index, state, direction = 1, quiet = false) {
+    const card = this.cards[index];
+    if (!card) return;
+    const art = card.art;
+    if (!state) {
+      if (art.showingDyn) { art.showingDyn = false; card.material.uniforms.uMap.value = art.base; }
+    } else {
+      if (!art.dyn) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1280;
+        canvas.height = 800;
+        art.canvas = canvas;
+        art.dyn = new THREE.CanvasTexture(canvas);
+        art.dyn.colorSpace = THREE.SRGBColorSpace;
+        art.dyn.anisotropy = 8;
+        this.textures.push(art.dyn);
+      }
+      drawStudyTexture(art.canvas, card.project, index, this.cards.length, card.accent, state);
+      art.dyn.needsUpdate = true;
+      art.showingDyn = true;
+      card.material.uniforms.uMap.value = art.dyn;
+    }
+    if (!this.reduced && !quiet) { card.arrived = 1; card.kick = direction; }
+  }
+
+  /** Dim every panel whose index is not in `set` (pass null to clear). */
+  setHighlight(set) {
+    this.highlight = set || null;
+  }
+
   _onPointerMove(e) {
     const rect = this.canvas.getBoundingClientRect();
     this._pointer = {
@@ -656,24 +923,39 @@ export class WorkWorld {
     this.mouse.set(this._pointer.x, this._pointer.y);
   }
 
-  _onClick() {
-    if (this.hoverIndex < 0) return;
-    const project = this.cards[this.hoverIndex]?.project;
-    if (!project) return;
-    if (this.options.onSelect) this.options.onSelect(project);
+  _pick(ndc) {
+    this._raycaster ||= new THREE.Raycaster();
+    this._raycaster.setFromCamera(ndc, this.camera);
+    const targets = this.cards.filter(c => c.reveal > 0.5).map(c => c.screen);
+    const hit = this._raycaster.intersectObjects(targets, false)[0];
+    return hit ? this.cards.findIndex(c => c.screen === hit.object) : -1;
+  }
+
+  _onClick(e) {
+    if (this.focusIndex >= 0) return;
+    // never hijack clicks meant for the HUD
+    if (e.target?.closest?.('button, a, [data-wx-ui]')) return;
+    const rect = this.canvas.getBoundingClientRect();
+    const ndc = {
+      x: ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      y: -(((e.clientY - rect.top) / rect.height) * 2 - 1)
+    };
+    const index = this._pick(ndc);
+    if (index < 0) return;
+    const project = this.cards[index].project;
+    if (this.options.onSelect) this.options.onSelect(project, index);
     else if (project.href) window.open(project.href, '_blank', 'noopener');
   }
 
   _updateHover() {
-    if (!this._pointer) return;
-    this._raycaster ||= new THREE.Raycaster();
-    this._raycaster.setFromCamera(this._pointer, this.camera);
-    const targets = this.cards.filter(c => c.reveal > 0.5).map(c => c.screen);
-    const hit = this._raycaster.intersectObjects(targets, false)[0];
-    const next = hit ? this.cards.findIndex(c => c.screen === hit.object) : -1;
+    if (this.focusIndex >= 0 || !this._pointer) {
+      if (this.hoverIndex !== -1) { this.hoverIndex = -1; this._cursorTarget().style.cursor = ''; }
+      return;
+    }
+    const next = this._pick(this._pointer);
     if (next !== this.hoverIndex) {
       this.hoverIndex = next;
-      this.canvas.style.cursor = next >= 0 ? 'pointer' : '';
+      this._cursorTarget().style.cursor = next >= 0 ? 'pointer' : '';
     }
   }
 
@@ -681,6 +963,7 @@ export class WorkWorld {
     if (!this.renderer || this.disposed) return;
     const bounds = this.canvas.parentElement.getBoundingClientRect();
     if (bounds.width <= 0 || bounds.height <= 0) return;
+    this.compact = window.innerWidth < 768;
     this.camera.aspect = bounds.width / bounds.height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(bounds.width, bounds.height, false);
@@ -699,7 +982,6 @@ export class WorkWorld {
     this._lastFrameTime = now;
     if (!this.reduced) this.time += delta;
 
-    // damped scroll: the camera glides to where the page is, it doesn't snap
     const target = clamp01(this.getProgress());
     const prev = this.progress;
     this.progress += (target - prev) * (this.reduced ? 1 : 1 - Math.exp(-delta * 3.4));
@@ -707,14 +989,14 @@ export class WorkWorld {
     const wantedVel = this.reduced ? 0 : Math.min(rawVel * 5, 1.4);
     this.velocity += (wantedVel - this.velocity) * (1 - Math.exp(-delta * 6));
 
-    // pointer parallax (smoothed, off for reduced motion)
     const m = this.reduced ? new THREE.Vector2() : this.mouse;
     this.mouseSmooth.lerp(m, 1 - Math.exp(-delta * 3));
 
     const p = this.progress;
     const radial = this._radial(p, CAMERA_PHASE);
     const tangent = new THREE.Vector3(-radial.z, 0, radial.x);
-    const cam = this._path(p, 11, 7, CAMERA_PHASE);
+    // start close so the strand fills the opening frame, ease out as the descent begins
+    const cam = this._path(p, 9.2 + 1.8 * smooth(0, 0.2, p), 7, CAMERA_PHASE);
     cam.addScaledVector(tangent, this.mouseSmooth.x * 1.5);
     cam.y += this.mouseSmooth.y * 0.9;
     const focus = new THREE.Vector3(0, TOP_Y - p * DROP, 0);
@@ -722,7 +1004,6 @@ export class WorkWorld {
     this.camera.position.copy(cam);
     this.camera.lookAt(focus);
 
-    // the two accent lights ride along with the camera
     this.lightA.position.copy(focus).addScaledVector(radial, 8).addScaledVector(tangent, 6).add(new THREE.Vector3(0, 4, 0));
     this.lightB.position.copy(focus).addScaledVector(radial, 8).addScaledVector(tangent, -6).add(new THREE.Vector3(0, -2, 0));
     const breathe = this.reduced ? 0 : Math.sin(this.time * 0.8) * 22;
@@ -731,36 +1012,73 @@ export class WorkWorld {
 
     this._updateHover();
 
+    // camera basis for the focus pose (panel sits right of centre so the text column has room)
+    const fwd = this._tmpA.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
+    const right = this._tmpB.set(1, 0, 0).applyQuaternion(this.camera.quaternion);
+    const up = this._tmpC.set(0, 1, 0).applyQuaternion(this.camera.quaternion);
+    this._target.copy(this.camera.position)
+      .addScaledVector(fwd, 10)
+      .addScaledVector(right, this.compact ? 0 : 2.7)
+      .addScaledVector(up, this.compact ? 1.9 : 0.15);
+
+    const focusMax = this.cards.reduce((mx, c) => Math.max(mx, c.focus), 0);
+    const dim = 1 - 0.85 * focusMax;
+    const k = 1 - Math.exp(-delta * (this.reduced ? 40 : 4.5));
+
     this.cards.forEach(card => {
-      const dist = Math.abs(p - card.group.userData.progress);
-      const reveal = smooth(0.0, 1.0, clamp01((0.24 - dist) / 0.11));
+      const dist = Math.abs(p - card.progress);
+      let reveal = smooth(0, 1, clamp01((this.span - dist) / (this.span * 0.45)));
+
+      const isFocus = this.focusIndex === card.index;
+      card.focus += ((isFocus ? 1 : 0) - card.focus) * k;
+      const e = smooth(0, 1, card.focus);
+
+      const dimF = this.highlight && !this.highlight.has(card.index) ? 0.3 : 1;
+      reveal = Math.max(reveal * dim * dimF, e);
       const wasHidden = card.reveal < 0.02;
       card.reveal = reveal;
       card.group.visible = reveal > 0.005;
-      card.group.scale.setScalar(0.82 + 0.18 * reveal);
 
-      // brief glitch burst when a chapter arrives
-      if (wasHidden && reveal > 0.02 && !this.reduced) card.arrived = 1;
-      card.arrived = Math.max(0, card.arrived - delta * 1.8);
+      // fly between the path pose and the camera-facing pose
+      card.group.position.lerpVectors(card.basePos, this._target, e);
+      card.group.quaternion.slerpQuaternions(card.baseQuat, this.camera.quaternion, e);
+      const baseScale = 0.82 + 0.18 * reveal;
+      card.group.scale.setScalar(THREE.MathUtils.lerp(baseScale, this.compact ? 0.78 : 1.12, e));
 
       const isHover = this.cards[this.hoverIndex] === card;
       card.hover += ((isHover ? 1 : 0) - card.hover) * (1 - Math.exp(-delta * 8));
 
+      // gentle tilt toward the pointer on hover, and parallax while focused
+      const tilt = Math.max(card.hover, e * 0.6);
+      if (tilt > 0.001 && !this.reduced) {
+        card.group.rotateY(this.mouseSmooth.x * 0.12 * tilt);
+        card.group.rotateX(-this.mouseSmooth.y * 0.08 * tilt);
+      }
+
+      // a small shove each time the case study moves to the next beat
+      card.kick *= Math.exp(-delta * 4);
+      if (Math.abs(card.kick) > 0.001) {
+        card.group.rotateY(card.kick * 0.1);
+        card.group.scale.multiplyScalar(1 + Math.abs(card.kick) * 0.03);
+      }
+
+      if (wasHidden && reveal > 0.02 && !this.reduced) card.arrived = 1;
+      card.arrived = Math.max(0, card.arrived - delta * 1.8);
+
       const u = card.material.uniforms;
       u.uTime.value = this.time;
       u.uVel.value = this.velocity;
-      u.uHover.value = card.hover;
+      u.uHover.value = Math.max(card.hover, e * 0.5);
       u.uReveal.value = reveal;
       u.uGlitch.value = Math.max(card.arrived, card.hover * 0.15);
-      card.glow.material.opacity = reveal * (0.05 + card.hover * 0.06);
+      card.glow.material.opacity = reveal * (0.2 + card.hover * 0.14 + e * 0.12);
+      card.outline.material.opacity = reveal * (0.35 + card.hover * 0.5 + e * 0.3 + (this.highlight?.has(card.index) ? 0.35 : 0));
 
-      // slow float so panels feel suspended, not placed
-      const float = this.reduced ? 0 : Math.sin(this.time * 0.6 + card.group.userData.index * 2) * 0.1;
-      card.group.children[0].position.y = float;
-      card.screen.position.y = float;
+      const float = this.reduced ? 0 : Math.sin(this.time * 0.6 + card.index * 2) * 0.1;
+      card.body.position.y = float;
     });
 
-    this.heroMaterial.iridescenceThicknessRange = [180 + Math.sin(this.time * 0.15) * 40, 720];
+    this.heroMaterial.iridescenceThicknessRange = [100 + Math.sin(this.time * 0.15) * 30, 420];
     this.rings.children.forEach(r => { r.rotation.z += r.userData.spin * delta * (this.reduced ? 0 : 1 + this.velocity * 4); });
 
     const pu = this.particleMaterial.uniforms;
@@ -771,7 +1089,7 @@ export class WorkWorld {
     const lu = this.lookPass.uniforms;
     lu.uTime.value = this.time;
     lu.uVel.value = this.velocity;
-    lu.uGrain.value = this.reduced ? 0.02 : 0.045;
+    lu.uGrain.value = this.reduced ? 0.012 : 0.028;
 
     this.composer.render(delta);
   }
@@ -785,10 +1103,10 @@ export class WorkWorld {
     window.removeEventListener('click', this._onClick);
     document.removeEventListener('visibilitychange', this._onVisibility);
     this.reducedMotionQuery?.removeEventListener?.('change', this._onMotionChange);
-    this.canvas.style.cursor = '';
+    this._cursorTarget().style.cursor = '';
     this.scene.traverse(object => {
       object.geometry?.dispose();
-      if (Array.isArray(object.material)) object.material.forEach(m => m.dispose());
+      if (Array.isArray(object.material)) object.material.forEach(mt => mt.dispose());
       else object.material?.dispose();
     });
     this.textures.forEach(t => t.dispose());
