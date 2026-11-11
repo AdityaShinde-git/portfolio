@@ -121,7 +121,7 @@ const STYLE = `
 /* case study: paged beats, no scrolling wall of text ------------- */
 .wx-study{position:absolute;inset:0;z-index:5;pointer-events:none;opacity:0;visibility:hidden;transition:opacity .5s ease,visibility 0s .5s}
 .wx-study.is-open{opacity:1;visibility:visible;transition:opacity .5s ease}
-.wx-study-scrim{position:absolute;inset:0;background:linear-gradient(90deg,rgba(4,10,16,.94) 0,rgba(4,10,16,.82) 38%,rgba(4,10,16,.12) 66%,transparent)}
+.wx-study-scrim{position:absolute;inset:0;background:linear-gradient(90deg,rgba(4,10,16,.92) 0,rgba(4,10,16,.78) 22%,rgba(4,10,16,0) 40%)}
 .wx-study button,.wx-study a{pointer-events:auto}
 .wx-study-hint{position:absolute;top:clamp(18px,4.5vh,40px);left:50%;transform:translateX(-50%);font-size:10px;color:var(--wx-dim);letter-spacing:.16em;white-space:nowrap}
 .wx-study-close{position:absolute;top:clamp(18px,4.5vh,40px);left:clamp(64px,6vw,100px)}
@@ -143,7 +143,7 @@ const STYLE = `
 @keyframes wx-beat-d{from{opacity:0;transform:translateY(28px);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
 @keyframes wx-beat-u{from{opacity:0;transform:translateY(-28px);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
 
-.wx-beat-title{margin:0 0 .3em;font-family:var(--wx-serif);font-weight:400;font-size:clamp(38px,4.6vw,70px);line-height:1;letter-spacing:.01em;text-transform:uppercase}
+.wx-beat-title{margin:0 0 .3em;font-family:var(--wx-serif);font-weight:400;font-size:clamp(30px,3.6vw,54px);line-height:1.02;letter-spacing:.01em;text-transform:uppercase}
 .wx-beat-sub{margin:0 0 1.4em;color:var(--wx-dim);font-size:11.5px;letter-spacing:.1em;line-height:1.7}
 .wx-beat-text{margin:0;font-family:var(--wx-serif);font-weight:400;font-size:clamp(22px,2.4vw,34px);line-height:1.25;letter-spacing:0;text-transform:none;font-weight:300}
 .wx-beat-text em{font-style:italic}
@@ -159,6 +159,12 @@ const STYLE = `
 .wx-areas li:last-child{border-bottom:1px solid rgba(140,200,220,.14)}
 .wx-areas.is-dense li{padding:8px 0;font-size:11.5px}
 
+.wx-lede{margin:0 0 1.6em;max-width:470px;color:#cfe0e8;font-family:var(--wx-serif);font-size:clamp(15px,1.25vw,18px);line-height:1.65;letter-spacing:.01em;text-transform:none;font-weight:300}
+.wx-list{list-style:none;margin:0;padding:0}
+.wx-list li{display:grid;grid-template-columns:2.8em 1fr;gap:6px;padding:16px 0;border-top:1px solid rgba(140,200,220,.18)}
+.wx-list li:last-child{border-bottom:1px solid rgba(140,200,220,.18)}
+.wx-list span{color:var(--wx-dim);font-size:11px;letter-spacing:.14em;padding-top:.5em}
+.wx-list p{margin:0;color:#eaf2f6;font-family:var(--wx-serif);font-size:clamp(15px,1.3vw,19px);line-height:1.55;letter-spacing:.005em;text-transform:none;font-weight:400}
 .wx-end-links{display:flex;flex-wrap:wrap;gap:12px 28px;margin-top:2em}
 .wx-end-links a,.wx-end-links button{background:none;border:0;padding:0;color:var(--wx-ink);font:inherit;letter-spacing:.12em;text-transform:inherit;
   text-decoration:underline;text-underline-offset:6px;text-decoration-color:var(--wx-line);cursor:pointer}
@@ -213,19 +219,19 @@ function scramble(element, text, reduced, duration = 520) {
 }
 
 /* A case study is a sequence of beats: one idea per screen. */
+const PAGE_SIZE = 3;
+function pagesOf(section, items, symbol) {
+  const pages = Math.ceil(items.length / PAGE_SIZE);
+  return Array.from({ length: pages }, (_, page) => ({
+    kind: 'list', section, symbol, page, pages, all: items,
+    start: page * PAGE_SIZE, items: items.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+  }));
+}
 function buildBeats(project) {
-  const areas = project.areas || [];
-  const implementation = project.implementation || [];
-  const highlights = project.highlights || [];
-  const beats = [{ kind: 'intro' }];
-  if (project.overview) beats.push({ kind: 'text', section: 'OVERVIEW', text: project.overview });
-  if (areas.length) beats.push({ kind: 'areas', section: 'SYSTEM AREAS', items: areas });
-  implementation.forEach((text, i) => beats.push({
-    kind: 'text', section: 'ENGINEERING APPROACH', text, i, count: implementation.length, listItems: implementation, symbol: '>'
-  }));
-  highlights.forEach((text, i) => beats.push({
-    kind: 'text', section: 'PROJECT HIGHLIGHTS', text, i, count: highlights.length, listItems: highlights, symbol: '+'
-  }));
+  const beats = [{ kind: 'intro' }]; // title, stack and overview share the first page
+  if (project.areas?.length) beats.push({ kind: 'areas', section: 'SYSTEM AREAS', items: project.areas });
+  beats.push(...pagesOf('ENGINEERING APPROACH', project.implementation || [], '>'));
+  beats.push(...pagesOf('PROJECT HIGHLIGHTS', project.highlights || [], '+'));
   beats.push({ kind: 'end' });
   return beats;
 }
@@ -414,7 +420,7 @@ export function createProjectsAppContent(initialProjectId = '') {
     if (!beat) return null;
     const meta = { beat: index + 1, beats: beats.length };
     if (beat.kind === 'areas') return { kind: 'areas', section: beat.section, items: beat.items, active: areaActive, ...meta };
-    if (beat.kind === 'text' && beat.listItems) return { kind: 'list', section: beat.section, items: beat.listItems, active: beat.i, symbol: beat.symbol, ...meta };
+    if (beat.kind === 'list') return { kind: 'list', section: beat.section, items: beat.all, active: beat.start, activeEnd: beat.start + beat.items.length - 1, symbol: beat.symbol, ...meta };
     return null;
   };
 
@@ -429,7 +435,7 @@ export function createProjectsAppContent(initialProjectId = '') {
   const kickerFor = (beat, project) => {
     if (beat.kind === 'intro') return `CASE STUDY ${pad(studyIndex + 1)} / ${pad(n)} · ${escapeHTML(project.period || 'SELECTED WORK')}`;
     if (beat.kind === 'end') return 'END OF CASE STUDY';
-    if (beat.count) return `${beat.section} — ${pad(beat.i + 1)} / ${pad(beat.count)}`;
+    if (beat.pages > 1) return `${beat.section} — ${pad(beat.page + 1)} / ${pad(beat.pages)}`;
     return beat.section;
   };
 
@@ -439,11 +445,14 @@ export function createProjectsAppContent(initialProjectId = '') {
         return `
           <h2 class="wx-beat-title">${escapeHTML(project.title)}</h2>
           <p class="wx-beat-sub">${escapeHTML(project.subtitle || '')}</p>
+          ${project.overview ? `<p class="wx-lede">${escapeHTML(project.overview)}</p>` : ''}
           <div class="wx-tags">${(project.tech || []).map(t => `<span>${escapeHTML(t)}</span>`).join('')}</div>
           <p class="wx-beat-hint"><span aria-hidden="true">↓</span> SCROLL TO READ THE BUILD</p>`;
       case 'areas':
         return `<ul class="wx-areas ${beat.items.length > 8 ? 'is-dense' : ''}">${beat.items.map((item, i) =>
           `<li data-wx-area="${i}" class="${i === areaActive ? 'is-on' : ''}"><span>${pad(i + 1)}</span>${escapeHTML(item)}</li>`).join('')}</ul>`;
+      case 'list':
+        return `<ol class="wx-list">${beat.items.map((item, i) => `<li><span>${pad(beat.start + i + 1)}</span><p>${escapeHTML(item)}</p></li>`).join('')}</ol>`;
       case 'end':
         return `
           <p class="wx-beat-text">Want to talk about<br><em>this build?</em></p>

@@ -20,8 +20,13 @@ const smooth = (a, b, x) => {
 const WALK_TURNS = 1.6;
 const TOP_Y = 17;
 const DROP = 54;
-const COLUMN_BOTTOM = -41;
-const COLUMN_TOP = 21;
+// The strand runs well past the visible camera range at both ends, so its
+// ragged lathe caps are never on screen (they were the "open top" artefact).
+const COLUMN_BOTTOM = -66;
+const COLUMN_TOP = 48;
+const RING_BOTTOM = -37;
+const RING_TOP = 17;
+const INTRO_SECONDS = 3.4;
 const CAMERA_PHASE = 0.72;
 
 const ACCENTS = [0x5fd0e0, 0x7fb4ff, 0xe0a860, 0x6fe0c0, 0x9fbcd8, 0xf2c66b];
@@ -238,6 +243,7 @@ function drawStudyTexture(canvas, project, index, total, accentHex, state) {
 
   const items = state.items || [];
   const active = state.active ?? 0;
+  const activeEnd = state.activeEnd ?? active; // a page of the case study can light several rows
 
   if (state.kind === 'areas') {
     const k = Math.max(1, items.length);
@@ -292,11 +298,11 @@ function drawStudyTexture(canvas, project, index, total, accentHex, state) {
     c.strokeText(pad2(active + 1), 800, 700);
 
     const rows = 7;
-    const start = Math.max(0, Math.min(active - 3, Math.max(0, items.length - rows)));
+    const start = Math.max(0, Math.min(active - 1, Math.max(0, items.length - rows)));
     for (let r = 0; r < rows && start + r < items.length; r += 1) {
       const i = start + r;
       const y = 215 + r * 72;
-      const on = i === active;
+      const on = i >= active && i <= activeEnd;
       if (on) {
         c.fillStyle = `${accent}22`;
         c.fillRect(80, y, W - 160, 56);
@@ -324,7 +330,7 @@ function drawStudyTexture(canvas, project, index, total, accentHex, state) {
   const segGap = 8;
   const segW = (W - 160 - segGap * (steps - 1)) / steps;
   for (let i = 0; i < steps; i += 1) {
-    c.fillStyle = i <= active ? accent : 'rgba(255,255,255,0.14)';
+    c.fillStyle = i <= activeEnd ? accent : 'rgba(255,255,255,0.14)';
     c.fillRect(80 + i * (segW + segGap), H - 70, segW, 6);
   }
 
@@ -378,6 +384,7 @@ const SCREEN_FRAG = /* glsl */ `
   uniform float uHover;
   uniform float uReveal;
   uniform float uGlitch;
+  uniform float uFocus;
   varying vec2 vUv;
 
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -389,14 +396,15 @@ const SCREEN_FRAG = /* glsl */ `
     float tear = step(0.965, hash(vec2(row, floor(uTime * 8.0)))) * uGlitch;
     uv.x += tear * 0.025;
 
-    float split = 0.0012 + uVel * 0.006 + uHover * 0.004 + uGlitch * 0.004;
+    float calm = 1.0 - 0.85 * uFocus;
+    float split = (0.0012 + uVel * 0.006 + uHover * 0.004 + uGlitch * 0.004) * calm;
     vec3 col;
     col.r = texture2D(uMap, uv + vec2(split, 0.0)).r;
     col.g = texture2D(uMap, uv).g;
     col.b = texture2D(uMap, uv - vec2(split, 0.0)).b;
 
-    col *= 0.96 + 0.04 * sin(uv.y * 900.0);
-    col += (hash(uv * 900.0 + uTime) - 0.5) * 0.016;
+    col *= 0.96 + 0.04 * calm * sin(uv.y * 900.0) + 0.04 * (1.0 - calm);
+    col += (hash(uv * 900.0 + uTime) - 0.5) * 0.016 * calm;
 
     // a bright scan sweep that crosses the glass while hovered
     float sweep = exp(-pow((fract(uTime * 0.35) - uv.y) * 14.0, 2.0));
@@ -405,6 +413,7 @@ const SCREEN_FRAG = /* glsl */ `
     vec2 e = abs(uv - 0.5) * 2.0;
     col *= 1.0 - 0.28 * smoothstep(0.55, 1.15, max(e.x, e.y));
     col *= mix(0.78, 1.12, uHover);
+    col *= 1.0 + 0.22 * uFocus; // case-study panel: brighter and crisp
 
     gl_FragColor = vec4(col * uReveal, uReveal);
   }
@@ -456,7 +465,8 @@ const LookShader = {
     uTime: { value: 0 },
     uVel: { value: 0 },
     uGrain: { value: 0.028 },
-    uAberration: { value: 0.0006 }
+    uAberration: { value: 0.0006 },
+    uIntro: { value: 0 }
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -468,18 +478,24 @@ const LookShader = {
     uniform float uVel;
     uniform float uGrain;
     uniform float uAberration;
+    uniform float uIntro;
     varying vec2 vUv;
     float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     void main() {
       vec2 dir = vUv - 0.5;
       float dist = dot(dir, dir);
       float ca = uAberration + uVel * 0.0035 * (0.4 + dist * 2.0);
+      // intro: a soft iris opens from the centre of the strand
+      float r = length(dir * vec2(1.6, 1.0));
+      float open = uIntro * 1.55;
+      float iris = smoothstep(open - 0.42, open, r + hash(vUv * 40.0) * 0.015);
       vec3 col;
       col.r = texture2D(tDiffuse, vUv + dir * ca).r;
       col.g = texture2D(tDiffuse, vUv).g;
       col.b = texture2D(tDiffuse, vUv - dir * ca).b;
       col += (hash(vUv * vec2(1920.0, 1080.0) + fract(uTime) * 91.0) - 0.5) * uGrain;
       col *= 1.0 - smoothstep(0.25, 0.95, dist * 1.9) * 0.55;
+      col *= (1.0 - iris) * smoothstep(0.0, 0.18, uIntro);
       gl_FragColor = vec4(col, 1.0);
     }
   `
@@ -517,6 +533,8 @@ export class WorkWorld {
     this.disposed = false;
     this.progress = clamp01(getProgress?.() ?? 0);
     this.velocity = 0;
+    this.pulse = 0;
+    this.intro = 0;
     this.time = 0;
     this.mouse = new THREE.Vector2();
     this.mouseSmooth = new THREE.Vector2();
@@ -616,7 +634,7 @@ export class WorkWorld {
 
   _buildHero() {
     const segs = this.compact ? 72 : 140;
-    const steps = this.compact ? 260 : 460;
+    const steps = this.compact ? 520 : 840;
     const points = [];
     for (let i = 0; i <= steps; i += 1) {
       const t = i / steps;
@@ -677,7 +695,7 @@ export class WorkWorld {
           fog: true
         })
       );
-      ring.position.y = COLUMN_BOTTOM + 4 + t * (COLUMN_TOP - COLUMN_BOTTOM - 8);
+      ring.position.y = RING_BOTTOM + t * (RING_TOP - RING_BOTTOM);
       ring.rotation.set(Math.PI / 2 + Math.sin(i * 1.7) * 0.28, 0, Math.cos(i * 2.3) * 0.28);
       ring.userData.spin = (i % 2 ? 1 : -1) * (0.04 + (i % 3) * 0.02);
       group.add(ring);
@@ -756,7 +774,8 @@ export class WorkWorld {
           uVel: { value: 0 },
           uHover: { value: 0 },
           uReveal: { value: 0 },
-          uGlitch: { value: 0 }
+          uGlitch: { value: 0 },
+          uFocus: { value: 0 }
         },
         vertexShader: SCREEN_VERT,
         fragmentShader: SCREEN_FRAG,
@@ -872,7 +891,9 @@ export class WorkWorld {
   /* ---------- interaction ---------- */
 
   setFocus(index) {
-    this.focusIndex = Number.isInteger(index) && index >= 0 && index < this.cards.length ? index : -1;
+    const next = Number.isInteger(index) && index >= 0 && index < this.cards.length ? index : -1;
+    if (next !== this.focusIndex) this.pulse = 1; // a burst of warp/aberration on every open/close
+    this.focusIndex = next;
     if (this.focusIndex >= 0) {
       this.hoverIndex = -1;
       this._cursorTarget().style.cursor = '';
@@ -986,7 +1007,10 @@ export class WorkWorld {
     const prev = this.progress;
     this.progress += (target - prev) * (this.reduced ? 1 : 1 - Math.exp(-delta * 3.4));
     const rawVel = delta > 0 ? Math.abs(this.progress - prev) / delta : 0;
-    const wantedVel = this.reduced ? 0 : Math.min(rawVel * 5, 1.4);
+    this.intro = this.reduced ? 1 : Math.min(1, this.intro + delta / INTRO_SECONDS);
+    const introE = 1 - Math.pow(1 - this.intro, 3); // ease-out cubic
+    this.pulse *= Math.exp(-delta * 2.6);
+    const wantedVel = this.reduced ? 0 : Math.min(rawVel * 5 + this.pulse * 0.9 + (1 - introE) * 0.9, 1.5);
     this.velocity += (wantedVel - this.velocity) * (1 - Math.exp(-delta * 6));
 
     const m = this.reduced ? new THREE.Vector2() : this.mouse;
@@ -1001,6 +1025,16 @@ export class WorkWorld {
     cam.y += this.mouseSmooth.y * 0.9;
     const focus = new THREE.Vector3(0, TOP_Y - p * DROP, 0);
     focus.addScaledVector(tangent, -this.mouseSmooth.x * 0.5);
+    // intro dolly: start pulled back and high with a wide lens, settle into the strand
+    if (introE < 1) {
+      cam.addScaledVector(radial, (1 - introE) * 15);
+      cam.y += (1 - introE) * 9;
+    }
+    const fov = 45 + (1 - introE) * 20;
+    if (Math.abs(this.camera.fov - fov) > 0.01) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
     this.camera.position.copy(cam);
     this.camera.lookAt(focus);
 
@@ -1018,7 +1052,7 @@ export class WorkWorld {
     const up = this._tmpC.set(0, 1, 0).applyQuaternion(this.camera.quaternion);
     this._target.copy(this.camera.position)
       .addScaledVector(fwd, 10)
-      .addScaledVector(right, this.compact ? 0 : 2.7)
+      .addScaledVector(right, this.compact ? 0 : 3.0)
       .addScaledVector(up, this.compact ? 1.9 : 0.15);
 
     const focusMax = this.cards.reduce((mx, c) => Math.max(mx, c.focus), 0);
@@ -1049,7 +1083,7 @@ export class WorkWorld {
       card.hover += ((isHover ? 1 : 0) - card.hover) * (1 - Math.exp(-delta * 8));
 
       // gentle tilt toward the pointer on hover, and parallax while focused
-      const tilt = Math.max(card.hover, e * 0.6);
+      const tilt = Math.max(card.hover, e * 0.25);
       if (tilt > 0.001 && !this.reduced) {
         card.group.rotateY(this.mouseSmooth.x * 0.12 * tilt);
         card.group.rotateX(-this.mouseSmooth.y * 0.08 * tilt);
@@ -1070,7 +1104,8 @@ export class WorkWorld {
       u.uVel.value = this.velocity;
       u.uHover.value = Math.max(card.hover, e * 0.5);
       u.uReveal.value = reveal;
-      u.uGlitch.value = Math.max(card.arrived, card.hover * 0.15);
+      u.uGlitch.value = Math.max(card.arrived, card.hover * 0.15) * (1 - 0.8 * e);
+      u.uFocus.value = e;
       card.glow.material.opacity = reveal * (0.2 + card.hover * 0.14 + e * 0.12);
       card.outline.material.opacity = reveal * (0.35 + card.hover * 0.5 + e * 0.3 + (this.highlight?.has(card.index) ? 0.35 : 0));
 
@@ -1090,6 +1125,7 @@ export class WorkWorld {
     lu.uTime.value = this.time;
     lu.uVel.value = this.velocity;
     lu.uGrain.value = this.reduced ? 0.012 : 0.028;
+    lu.uIntro.value = introE;
 
     this.composer.render(delta);
   }
