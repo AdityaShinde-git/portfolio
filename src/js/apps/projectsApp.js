@@ -9,6 +9,9 @@ function escapeHTML(value) {
 const pad = value => String(value).padStart(2, '0');
 const DEPTH_METERS = 1200;
 
+// same order as the panel accents in workWorld.js, so the text matches its panel
+const ACCENT_CSS = ['#3fd0c4', '#ff5a4f', '#e0a860', '#8a7bff', '#6fe0c0', '#f06fb0'];
+
 /* ------------------------------------------------------------------ */
 /*  Styles (self-contained: nothing here depends on the old walk-* CSS) */
 /* ------------------------------------------------------------------ */
@@ -63,8 +66,8 @@ const STYLE = `
 /* project info */
 .wx-num{display:flex;align-items:center;gap:14px;color:var(--wx-dim);font-size:10.5px;letter-spacing:.14em}
 .wx-num i{display:block;width:44px;height:1px;background:var(--wx-line)}
-.wx-title{margin:.5em 0 .35em;font-family:var(--wx-serif);font-weight:400;font-size:clamp(30px,3.4vw,50px);line-height:1;letter-spacing:.01em;text-transform:uppercase}
-.wx-sub{margin:0 0 1.2em;color:var(--wx-dim);font-size:11px;letter-spacing:.1em}
+.wx-title{margin:.5em 0 .35em;font-family:var(--wx-serif);font-weight:400;font-size:clamp(28px,3vw,44px);line-height:1;letter-spacing:.01em;text-transform:uppercase}
+.wx-sub{margin:0 0 1.7em;color:var(--wx-dim);font-size:11px;letter-spacing:.1em}
 .wx-overview{margin:0 0 1.3em;line-height:1.8;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;font-size:11.5px}
 .wx-tags{display:flex;flex-wrap:wrap;gap:4px 16px;margin:0 0 1.5em;color:var(--wx-dim);font-size:10.5px}
 .wx-tags span::before{content:"-> "}
@@ -118,80 +121,53 @@ const STYLE = `
 .wx-count-bar{width:90px;height:1px;background:var(--wx-line);position:relative;overflow:hidden}
 .wx-count-bar span{position:absolute;inset:0;background:var(--wx-ink);transform-origin:left;transform:scaleX(0)}
 
-/* case study: paged beats, no scrolling wall of text ------------- */
-.wx-study{position:absolute;inset:0;z-index:5;pointer-events:none;opacity:0;visibility:hidden;transition:opacity .5s ease,visibility 0s .5s}
+/* case study: one calm screen -------------------------------------- */
+.wx-study{position:absolute;inset:0;z-index:5;pointer-events:none;opacity:0;visibility:hidden;transition:opacity .5s ease,visibility 0s .5s;--wx-accent:#7fb4ff}
 .wx-study.is-open{opacity:1;visibility:visible;transition:opacity .5s ease}
-.wx-study-scrim{position:absolute;inset:0;background:linear-gradient(90deg,rgba(4,10,16,.92) 0,rgba(4,10,16,.78) 22%,rgba(4,10,16,0) 40%)}
+.wx-study-fx{position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(90% 80% at 58% 48%,color-mix(in srgb,var(--wx-accent) 24%,transparent),transparent 72%),
+    linear-gradient(0deg,color-mix(in srgb,var(--wx-accent) 18%,transparent),transparent 42%)}
+.wx-study-fx::before{content:"";position:absolute;inset:-40px;opacity:.2;mix-blend-mode:screen;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='600'%3E%3Cfilter id='f' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.0035 0.55' numOctaves='2' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 1.5 0 0 0 -0.62'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E");background-size:900px 600px;
+  -webkit-mask-image:radial-gradient(ellipse 40% 44% at 57% 50%,transparent 58%,#000 100%);mask-image:radial-gradient(ellipse 40% 44% at 57% 50%,transparent 58%,#000 100%);
+  animation:wx-streak 1.1s steps(5) infinite}
+@keyframes wx-streak{0%{transform:translate(0,0)}25%{transform:translate(-14px,6px)}50%{transform:translate(9px,-9px)}75%{transform:translate(-6px,12px)}100%{transform:translate(0,0)}}
+.wx-study-scrim{position:absolute;inset:0;background:linear-gradient(90deg,rgba(2,5,8,.5) 0,rgba(2,5,8,.28) 26%,rgba(2,5,8,0) 46%)}
 .wx-study button,.wx-study a{pointer-events:auto}
 .wx-study-hint{position:absolute;top:clamp(18px,4.5vh,40px);left:50%;transform:translateX(-50%);font-size:10px;color:var(--wx-dim);letter-spacing:.16em;white-space:nowrap}
-.wx-study-close{position:absolute;top:clamp(18px,4.5vh,40px);left:clamp(64px,6vw,100px)}
 
-.wx-beats{position:absolute;left:clamp(20px,2.4vw,34px);top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px}
-.wx-beats button{background:none;border:0;padding:5px 0;cursor:pointer;display:block}
-.wx-beats i{display:block;width:10px;height:1px;background:rgba(140,200,220,.35);transition:width .3s,background .3s}
-.wx-beats button:hover i{background:#fff}
-.wx-beats button.is-done i{width:16px;background:rgba(255,255,255,.65)}
-.wx-beats button.is-active i{width:32px;background:#fff;box-shadow:0 0 8px rgba(255,255,255,.7)}
-
-.wx-study-text{position:absolute;left:clamp(64px,6vw,100px);top:clamp(80px,13vh,120px);bottom:clamp(84px,14vh,124px);width:min(540px,calc(100% - 150px));
-  display:flex;flex-direction:column;justify-content:center;pointer-events:none}
-.wx-study-text li,.wx-study-text button,.wx-study-text a{pointer-events:auto}
-.wx-beat-kicker{display:flex;align-items:center;gap:14px;margin:0 0 22px;color:var(--wx-dim);font-size:10.5px;letter-spacing:.16em}
-.wx-beat-kicker::before{content:"";width:34px;height:1px;background:var(--wx-dim)}
-.wx-beat-body.wx-in-d{animation:wx-beat-d .75s cubic-bezier(.2,.7,.2,1) both}
-.wx-beat-body.wx-in-u{animation:wx-beat-u .75s cubic-bezier(.2,.7,.2,1) both}
-@keyframes wx-beat-d{from{opacity:0;transform:translateY(28px);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
-@keyframes wx-beat-u{from{opacity:0;transform:translateY(-28px);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
-
-.wx-beat-title{margin:0 0 .3em;font-family:var(--wx-serif);font-weight:400;font-size:clamp(30px,3.6vw,54px);line-height:1.02;letter-spacing:.01em;text-transform:uppercase}
-.wx-beat-sub{margin:0 0 1.4em;color:var(--wx-dim);font-size:11.5px;letter-spacing:.1em;line-height:1.7}
-.wx-beat-text{margin:0;font-family:var(--wx-serif);font-weight:400;font-size:clamp(22px,2.4vw,34px);line-height:1.25;letter-spacing:0;text-transform:none;font-weight:300}
-.wx-beat-text em{font-style:italic}
-.wx-beat-hint{margin:2em 0 0;color:var(--wx-dim);font-size:10.5px;letter-spacing:.16em}
-.wx-beat-hint span{display:inline-block;animation:wx-bob 1.8s ease-in-out infinite}
-
-.wx-areas{list-style:none;margin:0;padding:0}
-.wx-areas li{position:relative;display:grid;grid-template-columns:2.6em 1fr;gap:6px;padding:12px 0;border-top:1px solid rgba(140,200,220,.14);color:var(--wx-dim);
-  font-size:12.5px;letter-spacing:.1em;line-height:1.5;cursor:default;transition:color .3s,padding-left .3s}
-.wx-areas li::before{content:"";position:absolute;left:0;top:-1px;height:1px;width:0;background:#fff;transition:width .5s ease}
-.wx-areas li.is-on{color:#fff;padding-left:10px}
-.wx-areas li.is-on::before{width:100%}
-.wx-areas li:last-child{border-bottom:1px solid rgba(140,200,220,.14)}
-.wx-areas.is-dense li{padding:8px 0;font-size:11.5px}
-
-.wx-lede{margin:0 0 1.6em;max-width:470px;color:#cfe0e8;font-family:var(--wx-serif);font-size:clamp(15px,1.25vw,18px);line-height:1.65;letter-spacing:.01em;text-transform:none;font-weight:300}
-.wx-list{list-style:none;margin:0;padding:0}
-.wx-list li{display:grid;grid-template-columns:2.8em 1fr;gap:6px;padding:16px 0;border-top:1px solid rgba(140,200,220,.18)}
-.wx-list li:last-child{border-bottom:1px solid rgba(140,200,220,.18)}
-.wx-list span{color:var(--wx-dim);font-size:11px;letter-spacing:.14em;padding-top:.5em}
-.wx-list p{margin:0;color:#eaf2f6;font-family:var(--wx-serif);font-size:clamp(15px,1.3vw,19px);line-height:1.55;letter-spacing:.005em;text-transform:none;font-weight:400}
-.wx-end-links{display:flex;flex-wrap:wrap;gap:12px 28px;margin-top:2em}
-.wx-end-links a,.wx-end-links button{background:none;border:0;padding:0;color:var(--wx-ink);font:inherit;letter-spacing:.12em;text-transform:inherit;
-  text-decoration:underline;text-underline-offset:6px;text-decoration-color:var(--wx-line);cursor:pointer}
-.wx-end-links a:hover,.wx-end-links button:hover,.wx-end-links a:focus-visible,.wx-end-links button:focus-visible{text-decoration-color:#fff;outline:none}
-
-.wx-study-foot{position:absolute;left:clamp(64px,6vw,100px);bottom:clamp(24px,5vh,44px);display:flex;align-items:center;gap:16px;color:var(--wx-dim);font-size:10.5px;letter-spacing:.14em}
-.wx-step{width:38px;height:38px;border-radius:50%;border:1px solid var(--wx-line);background:rgba(6,14,22,.35);color:var(--wx-ink);font:inherit;font-size:14px;cursor:pointer;
-  transition:background .2s,border-color .2s,opacity .2s}
-.wx-step:hover:not(:disabled),.wx-step:focus-visible{background:rgba(90,170,210,.2);border-color:rgba(170,225,240,.7);outline:none}
-.wx-step:disabled{opacity:.3;cursor:default}
+.wx-st{position:absolute;left:clamp(58px,5vw,84px);bottom:clamp(84px,15vh,140px);width:min(330px,calc(100% - 120px));outline:none}
+.wx-st-kicker{display:flex;align-items:center;gap:14px;margin:0 0 18px;color:var(--wx-dim);font-size:10.5px;letter-spacing:.16em}
+.wx-st-kicker::before{content:"";width:34px;height:1px;background:var(--wx-dim)}
+.wx-st-title{margin:0 0 .55em;font-family:var(--wx-serif);font-weight:500;font-size:clamp(20px,1.7vw,26px);line-height:1.15;letter-spacing:.08em;text-transform:uppercase;color:#fff}
+.wx-st-sub{margin:0 0 1.4em;color:var(--wx-accent);font-size:11.5px;letter-spacing:.14em;line-height:1.7}
+.wx-st-desc{margin:0 0 1.7em;color:color-mix(in srgb,var(--wx-accent) 22%,#fff);font-size:12px;line-height:1.95;letter-spacing:.07em}
+.wx-st-desc .wx-ghost{visibility:hidden}
+.wx-st .wx-tags{margin:0 0 1.9em}
+.wx-st-links{display:flex;flex-wrap:wrap;align-items:center;gap:12px 30px}
+.wx-st-links a,.wx-st-links button{background:none;border:0;padding:0;color:var(--wx-accent);font:inherit;letter-spacing:.12em;text-transform:inherit;text-decoration:underline;
+  text-underline-offset:6px;text-decoration-color:color-mix(in srgb,var(--wx-accent) 45%,transparent);cursor:pointer;transition:text-decoration-color .25s,color .25s}
+.wx-st-links a:hover,.wx-st-links button:hover,.wx-st-links a:focus-visible,.wx-st-links button:focus-visible{color:#fff;text-decoration-color:#fff;outline:none}
+.wx-fadein{opacity:0;animation:wx-fadein .8s ease forwards}
+@keyframes wx-fadein{to{opacity:1}}
 
 @media (max-width:900px){
   .wx-toc{display:none}
 }
 @media (max-width:760px){
-  .wx-rail,.wx-count,.wx-gauge,.wx-cue,.wx-beats{display:none}
+  .wx-rail,.wx-count,.wx-gauge,.wx-cue{display:none}
   .wx-block{left:20px;bottom:92px;width:calc(100% - 40px)}
   .wx-intro{width:calc(100% - 40px)}
   .wx-pill{left:20px}
   .wx-study-scrim{background:linear-gradient(0deg,rgba(4,10,16,.95) 0,rgba(4,10,16,.86) 56%,rgba(4,10,16,.1) 82%,transparent)}
-  .wx-study-text{left:20px;width:calc(100% - 40px);top:48%;bottom:84px;justify-content:flex-start}
-  .wx-study-close,.wx-study-foot{left:20px}
+  .wx-st{left:20px;width:calc(100% - 40px);bottom:56px}
+  .wx-study-fx::before{-webkit-mask-image:none;mask-image:none;opacity:.3}
   .wx-study-hint{display:none}
 }
 @media (prefers-reduced-motion:reduce){
   .wx-block,.wx-study,.wx-rail b,.wx-rail i,.wx-fade{transition:none}
-  .wx-intro>*,.wx-cta span,.wx-cue i::after,.wx-beat-body,.wx-beat-hint span{animation:none!important}
+  .wx-intro>*,.wx-cta span,.wx-cue i::after,.wx-study-fx::before{animation:none!important}
+  .wx-fadein{animation:none;opacity:1}
 }
 `;
 
@@ -200,6 +176,9 @@ const STYLE = `
 /* ------------------------------------------------------------------ */
 
 const GLYPHS = '▌▐░▒#/\\<>_-+*0123456789ABCDEFXYZ';
+const TYPE_GLYPHS = '#/\\<>_-+*0123456789ABCDEFXYZ';
+
+// title-style reveal: every letter flickers through noise, then settles left to right
 function scramble(element, text, reduced, duration = 520) {
   cancelAnimationFrame(element._wxRaf);
   if (reduced || !text) { element.textContent = text; return; }
@@ -218,22 +197,51 @@ function scramble(element, text, reduced, duration = 520) {
   element._wxRaf = requestAnimationFrame(step);
 }
 
-/* A case study is a sequence of beats: one idea per screen. */
-const PAGE_SIZE = 3;
-function pagesOf(section, items, symbol) {
-  const pages = Math.ceil(items.length / PAGE_SIZE);
-  return Array.from({ length: pages }, (_, page) => ({
-    kind: 'list', section, symbol, page, pages, all: items,
-    start: page * PAGE_SIZE, items: items.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
-  }));
+// description reveal: letters load in one by one, with a short run of noise at the cursor.
+// The unrevealed remainder stays in the layout (hidden), so the lines never reflow.
+function typeReveal(element, text, reduced, { delay = 0, cps = 90, tail = 5 } = {}) {
+  cancelAnimationFrame(element._wxRaf);
+  clearTimeout(element._wxT);
+  if (reduced || !text) { element.textContent = text; return; }
+  const shown = document.createTextNode('');
+  const ghost = document.createElement('span');
+  ghost.className = 'wx-ghost';
+  ghost.textContent = text;
+  element.replaceChildren(shown, ghost);
+  const begin = () => {
+    const start = performance.now();
+    const step = now => {
+      const n = Math.min(text.length, Math.floor(((now - start) / 1000) * cps));
+      if (n >= text.length) { element.textContent = text; return; }
+      const noise = Math.min(tail, text.length - n);
+      let head = text.slice(0, n);
+      for (let i = 0; i < noise; i += 1) {
+        const ch = text[n + i];
+        head += ch === ' ' ? ' ' : TYPE_GLYPHS[Math.floor(Math.random() * TYPE_GLYPHS.length)];
+      }
+      shown.nodeValue = head;
+      ghost.textContent = text.slice(n + noise);
+      element._wxRaf = requestAnimationFrame(step);
+    };
+    element._wxRaf = requestAnimationFrame(step);
+  };
+  if (delay) element._wxT = setTimeout(begin, delay); else begin();
 }
-function buildBeats(project) {
-  const beats = [{ kind: 'intro' }]; // title, stack and overview share the first page
-  if (project.areas?.length) beats.push({ kind: 'areas', section: 'SYSTEM AREAS', items: project.areas });
-  beats.push(...pagesOf('ENGINEERING APPROACH', project.implementation || [], '>'));
-  beats.push(...pagesOf('PROJECT HIGHLIGHTS', project.highlights || [], '+'));
-  beats.push({ kind: 'end' });
-  return beats;
+
+// Finds a project's outbound links. Add any of these fields to a project in resumeData
+// (liveUrl / github, or a links array) and they show up in the expanded view.
+const isUrl = u => typeof u === 'string' && /^(https?:\/\/|\/|#)/.test(u);
+function projectLinks(project) {
+  const links = [];
+  const add = (label, url) => { if (isUrl(url) && !links.some(l => l.url === url)) links.push({ label, url }); };
+  add('OPEN PROJECT', project.liveUrl || project.live || project.demo || project.demoUrl || project.website || project.url || project.link || project.href);
+  add('VIEW SOURCE', project.github || project.repo || project.repoUrl || project.source || project.code);
+  if (Array.isArray(project.links)) {
+    project.links.forEach(l => (typeof l === 'string'
+      ? add('OPEN LINK', l)
+      : add(String(l.label || l.title || l.name || 'OPEN LINK').toUpperCase(), l.url || l.href)));
+  }
+  return links;
 }
 
 /* ------------------------------------------------------------------ */
@@ -275,8 +283,6 @@ export function createProjectsAppContent(initialProjectId = '') {
           <div class="wx-num"><span class="wx-info-meta"></span><i></i><span class="wx-info-period"></span></div>
           <h2 class="wx-title wx-info-title"></h2>
           <p class="wx-sub wx-info-sub"></p>
-          <p class="wx-overview wx-info-overview"></p>
-          <div class="wx-tags wx-info-tags"></div>
           <button class="wx-link" type="button" data-wx-open>-&gt; OPEN CASE STUDY</button>
         </section>
 
@@ -307,19 +313,17 @@ export function createProjectsAppContent(initialProjectId = '') {
       </div>
 
       <aside class="wx-study" aria-hidden="true">
+        <div class="wx-study-fx" aria-hidden="true"></div>
         <div class="wx-study-scrim"></div>
-        <button class="wx-link wx-study-close" type="button" data-wx-close>&lt;- CLOSE</button>
-        <div class="wx-study-hint">SCROLL OR ↑ ↓ TO READ · ESC TO CLOSE</div>
-        <nav class="wx-beats" aria-label="Case study parts"></nav>
-        <section class="wx-study-text" role="dialog" aria-modal="true" aria-label="Case study">
-          <p class="wx-beat-kicker"></p>
-          <div class="wx-beat-body"></div>
+        <div class="wx-study-hint">SCROLL OR ESC TO RETURN</div>
+        <section class="wx-st" role="dialog" aria-modal="true" aria-label="Case study" tabindex="-1">
+          <p class="wx-st-kicker"></p>
+          <h2 class="wx-st-title"></h2>
+          <p class="wx-st-sub"></p>
+          <p class="wx-st-desc"></p>
+          <div class="wx-tags wx-st-tags"></div>
+          <div class="wx-st-links"></div>
         </section>
-        <div class="wx-study-foot">
-          <button class="wx-step" type="button" data-wx-step="-1" aria-label="Previous">↑</button>
-          <button class="wx-step" type="button" data-wx-step="1" aria-label="Next">↓</button>
-          <span class="wx-study-count">01 / 01</span>
-        </div>
       </aside>
     </div>
   `;
@@ -337,8 +341,6 @@ export function createProjectsAppContent(initialProjectId = '') {
   const periodEl = q('.wx-info-period');
   const titleEl = q('.wx-info-title');
   const subEl = q('.wx-info-sub');
-  const overviewEl = q('.wx-info-overview');
-  const tagsEl = q('.wx-info-tags');
   const openBtn = q('[data-wx-open]');
   const rail = q('.wx-rail');
   const railButtons = [...container.querySelectorAll('.wx-rail [data-wx-go]')];
@@ -347,23 +349,24 @@ export function createProjectsAppContent(initialProjectId = '') {
   const gaugeMark = q('.wx-gauge-mark');
   const gaugeVal = q('.wx-gauge-val');
   const study = q('.wx-study');
-  const studyText = q('.wx-study-text');
-  const kickerEl = q('.wx-beat-kicker');
-  const bodyEl = q('.wx-beat-body');
-  const beatsNav = q('.wx-beats');
-  const studyCount = q('.wx-study-count');
-  const stepButtons = [...container.querySelectorAll('[data-wx-step]')];
+  const st = {
+    root: q('.wx-st'),
+    kicker: q('.wx-st-kicker'),
+    title: q('.wx-st-title'),
+    sub: q('.wx-st-sub'),
+    desc: q('.wx-st-desc'),
+    tags: q('.wx-st-tags'),
+    links: q('.wx-st-links')
+  };
 
   let world = null;
   let disposed = false;
   let current = -2;      // -1 intro, 0..n-1 project, n outro
   let studyIndex = -1;
   let studyOpener = null;
-  let beats = [];
-  let beatIndex = -1;
-  let areaActive = 0;
-  let areaTimer = 0;
-  let lockUntil = 0;
+  let openedAt = 0;
+  let wheelAcc = 0;
+  let wheelTimer = 0;
   let touchY = null;
 
   // Project i is centred at scrollTop = (i + 1) * viewport height,
@@ -393,12 +396,6 @@ export function createProjectsAppContent(initialProjectId = '') {
     periodEl.textContent = project.period || 'SELECTED WORK';
     scramble(titleEl, project.title || '', reduced);
     scramble(subEl, project.subtitle || '', reduced, 640);
-    overviewEl.textContent = project.overview || '';
-    tagsEl.replaceChildren(...(project.tech || []).slice(0, 6).map(tech => {
-      const span = document.createElement('span');
-      span.textContent = tech;
-      return span;
-    }));
     openBtn.dataset.wxOpen = String(active);
   };
 
@@ -412,104 +409,52 @@ export function createProjectsAppContent(initialProjectId = '') {
     setActive(Math.max(-1, Math.min(n, Math.round(progress * (n + 1)) - 1)));
   };
 
-  /* ---------- case study: beats ---------- */
+  /* ---------- case study: a single screen ---------- */
 
-  const stopAreaCycle = () => { clearInterval(areaTimer); areaTimer = 0; };
-
-  const panelStateFor = (beat, index) => {
-    if (!beat) return null;
-    const meta = { beat: index + 1, beats: beats.length };
-    if (beat.kind === 'areas') return { kind: 'areas', section: beat.section, items: beat.items, active: areaActive, ...meta };
-    if (beat.kind === 'list') return { kind: 'list', section: beat.section, items: beat.all, active: beat.start, activeEnd: beat.start + beat.items.length - 1, symbol: beat.symbol, ...meta };
-    return null;
+  const fadeIn = (element, delayMs) => {
+    element.classList.add('wx-fadein');
+    element.style.animationDelay = `${Math.max(0, delayMs)}ms`;
   };
 
-  const setAreaActive = (value, quiet = true) => {
-    const beat = beats[beatIndex];
-    if (beat?.kind !== 'areas') return;
-    areaActive = (value + beat.items.length) % beat.items.length;
-    bodyEl.querySelectorAll('[data-wx-area]').forEach(row => row.classList.toggle('is-on', Number(row.dataset.wxArea) === areaActive));
-    world?.setPanelState(studyIndex, panelStateFor(beat, beatIndex), 0, quiet);
-  };
+  const playStudy = index => {
+    const project = projects[index];
+    study.style.setProperty('--wx-accent', ACCENT_CSS[index % ACCENT_CSS.length]);
+    st.root.setAttribute('aria-label', `Case study: ${project.title}`);
+    st.kicker.textContent = `CASE STUDY ${pad(index + 1)} / ${pad(n)} · ${project.period || 'SELECTED WORK'}`;
 
-  const kickerFor = (beat, project) => {
-    if (beat.kind === 'intro') return `CASE STUDY ${pad(studyIndex + 1)} / ${pad(n)} · ${escapeHTML(project.period || 'SELECTED WORK')}`;
-    if (beat.kind === 'end') return 'END OF CASE STUDY';
-    if (beat.pages > 1) return `${beat.section} — ${pad(beat.page + 1)} / ${pad(beat.pages)}`;
-    return beat.section;
-  };
+    scramble(st.title, project.title || '', reduced, 700);
+    scramble(st.sub, project.subtitle || '', reduced, 800);
 
-  const bodyFor = (beat, project) => {
-    switch (beat.kind) {
-      case 'intro':
-        return `
-          <h2 class="wx-beat-title">${escapeHTML(project.title)}</h2>
-          <p class="wx-beat-sub">${escapeHTML(project.subtitle || '')}</p>
-          ${project.overview ? `<p class="wx-lede">${escapeHTML(project.overview)}</p>` : ''}
-          <div class="wx-tags">${(project.tech || []).map(t => `<span>${escapeHTML(t)}</span>`).join('')}</div>
-          <p class="wx-beat-hint"><span aria-hidden="true">↓</span> SCROLL TO READ THE BUILD</p>`;
-      case 'areas':
-        return `<ul class="wx-areas ${beat.items.length > 8 ? 'is-dense' : ''}">${beat.items.map((item, i) =>
-          `<li data-wx-area="${i}" class="${i === areaActive ? 'is-on' : ''}"><span>${pad(i + 1)}</span>${escapeHTML(item)}</li>`).join('')}</ul>`;
-      case 'list':
-        return `<ol class="wx-list">${beat.items.map((item, i) => `<li><span>${pad(beat.start + i + 1)}</span><p>${escapeHTML(item)}</p></li>`).join('')}</ol>`;
-      case 'end':
-        return `
-          <p class="wx-beat-text">Want to talk about<br><em>this build?</em></p>
-          <div class="wx-end-links">
-            <a href="#contact" data-portfolio-route="contact">DISCUSS THIS PROJECT ↗</a>
-            ${n > 1 ? '<button type="button" data-wx-next>NEXT PROJECT -&gt;</button>' : ''}
-            <button type="button" data-wx-close>&lt;- CLOSE</button>
-          </div>`;
-      default:
-        return `<p class="wx-beat-text">${escapeHTML(beat.text)}</p>`;
-    }
-  };
+    const desc = project.overview || project.subtitle || '';
+    const DESC_DELAY = 420;
+    const CPS = 90;
+    typeReveal(st.desc, desc, reduced, { delay: DESC_DELAY, cps: CPS });
+    // tags and links arrive just as the last letters land
+    const doneMs = reduced ? 0 : DESC_DELAY + (desc.length / CPS) * 1000;
 
-  const goBeat = (next, direction = 1) => {
-    if (next < 0 || next >= beats.length || next === beatIndex) return;
-    const project = projects[studyIndex];
-    const beat = beats[next];
-    beatIndex = next;
-    stopAreaCycle();
-    if (beat.kind === 'areas') areaActive = 0;
+    st.tags.replaceChildren(...(project.tech || []).slice(0, 6).map((tech, i) => {
+      const span = document.createElement('span');
+      span.textContent = tech;
+      if (!reduced) fadeIn(span, doneMs - 250 + i * 70);
+      return span;
+    }));
 
-    kickerEl.innerHTML = kickerFor(beat, project);
-    bodyEl.innerHTML = bodyFor(beat, project);
-    bodyEl.className = 'wx-beat-body';
-    void bodyEl.offsetWidth; // restart the entrance animation
-    if (!reduced) bodyEl.classList.add(direction >= 0 ? 'wx-in-d' : 'wx-in-u');
-
-    [...beatsNav.children].forEach((button, i) => {
-      button.classList.toggle('is-active', i === next);
-      button.classList.toggle('is-done', i < next);
-    });
-    studyCount.textContent = `${pad(next + 1)} / ${pad(beats.length)}`;
-    stepButtons.forEach(button => { button.disabled = Number(button.dataset.wxStep) < 0 ? next === 0 : next === beats.length - 1; });
-
-    world?.setPanelState(studyIndex, panelStateFor(beat, next), direction >= 0 ? 1 : -1);
-    if (beat.kind === 'areas' && !reduced) {
-      areaTimer = setInterval(() => setAreaActive(areaActive + 1, true), 1700);
-    }
-  };
-
-  const step = direction => goBeat(beatIndex + direction, direction);
-
-  const startStudy = index => {
-    studyIndex = index;
-    beats = buildBeats(projects[index]);
-    beatIndex = -1;
-    areaActive = 0;
-    studyText.setAttribute('aria-label', `Case study: ${projects[index].title}`);
-    beatsNav.innerHTML = beats.map((_, i) => `<button type="button" data-wx-beat="${i}" aria-label="Part ${i + 1} of ${beats.length}"><i></i></button>`).join('');
-    goBeat(0, 1);
+    const links = projectLinks(project);
+    const linkHTML = links.length
+      ? links.map((l, i) => `<a href="${escapeHTML(l.url)}" target="_blank" rel="noopener noreferrer">-&gt; ${escapeHTML(l.label)} ↗</a>`).join('')
+      : '<a href="#contact" data-portfolio-route="contact">-&gt; DISCUSS THIS PROJECT ↗</a>';
+    st.links.innerHTML = `${linkHTML}<button type="button" data-wx-close>&lt;- CLOSE</button>`;
+    st.links.classList.remove('wx-fadein');
+    st.links.style.animationDelay = '';
+    if (!reduced) fadeIn(st.links, doneMs + 100);
   };
 
   const closeStudy = () => {
     if (studyIndex < 0) return;
-    stopAreaCycle();
-    world?.setPanelState(studyIndex, null, 0, true);
+    cancelAnimationFrame(st.desc._wxRaf);
+    clearTimeout(st.desc._wxT);
     studyIndex = -1;
+    wheelAcc = 0;
     study.classList.remove('is-open');
     study.setAttribute('aria-hidden', 'true');
     shell.classList.remove('is-study');
@@ -521,47 +466,46 @@ export function createProjectsAppContent(initialProjectId = '') {
   const openStudy = index => {
     if (!projects[index]) return;
     studyOpener = document.activeElement instanceof HTMLElement && container.contains(document.activeElement) ? document.activeElement : null;
+    studyIndex = index;
+    openedAt = performance.now();
+    wheelAcc = 0;
     study.classList.add('is-open');
     study.setAttribute('aria-hidden', 'false');
     shell.classList.add('is-study');
     scrollArea.style.overflowY = 'hidden';
-    startStudy(index);
+    playStudy(index);
     world?.setFocus(index);
-    q('.wx-study-close').focus({ preventScroll: true });
+    st.root.focus({ preventScroll: true });
   };
 
-  // fly on to the next project without leaving the case-study view
-  const nextProject = () => {
-    const next = (studyIndex + 1) % n;
-    stopAreaCycle();
-    world?.setPanelState(studyIndex, null, 0, true);
-    scrollToChapter(next);
-    startStudy(next);
-    world?.setFocus(next);
-  };
+  // a short grace period after opening, so scroll momentum from the click can't close it at once
+  const GRACE_MS = 700;
 
   const onKeydown = event => {
     if (studyIndex < 0) return;
     if (event.code === 'Escape') { closeStudy(); return; }
-    if (['ArrowDown', 'ArrowRight', 'PageDown'].includes(event.code)) { event.preventDefault(); step(1); return; }
-    if (['ArrowUp', 'ArrowLeft', 'PageUp'].includes(event.code)) { event.preventDefault(); step(-1); return; }
+    if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp'].includes(event.code)) {
+      if (performance.now() - openedAt > GRACE_MS) closeStudy();
+      return;
+    }
     if (event.code !== 'Tab') return;
-    const focusable = [...study.querySelectorAll('button, a[href], [tabindex]:not([tabindex="-1"])')]
-      .filter(el => !el.hasAttribute('disabled') && el.getClientRects().length);
+    const focusable = [...study.querySelectorAll('button, a[href]')].filter(el => !el.hasAttribute('disabled') && el.getClientRects().length);
     if (!focusable.length) return;
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
-    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === st.root)) { event.preventDefault(); last.focus(); }
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   };
 
-  // one gesture = one beat (locked briefly so trackpad momentum can't skip ahead)
+  // Scrolling past the case study ends it: one deliberate scroll returns to the normal view,
+  // and the rest of the gesture carries on as ordinary scrolling (never stuck).
   const onWheel = event => {
     if (studyIndex < 0) return;
-    const now = performance.now();
-    if (now < lockUntil || Math.abs(event.deltaY) < 8) return;
-    lockUntil = now + 750;
-    step(event.deltaY > 0 ? 1 : -1);
+    if (performance.now() - openedAt < GRACE_MS) return;
+    wheelAcc += event.deltaY;
+    clearTimeout(wheelTimer);
+    wheelTimer = setTimeout(() => { wheelAcc = 0; }, 220);
+    if (Math.abs(wheelAcc) >= 60) closeStudy();
   };
 
   /* ---------- wiring ---------- */
@@ -573,7 +517,7 @@ export function createProjectsAppContent(initialProjectId = '') {
     if (studyIndex < 0 || touchY == null) return;
     const dy = touchY - event.changedTouches[0].clientY;
     touchY = null;
-    if (Math.abs(dy) > 50) step(dy > 0 ? 1 : -1);
+    if (Math.abs(dy) > 50 && performance.now() - openedAt > GRACE_MS) closeStudy();
   }, { passive: true });
 
   // the rail and index sit above the scroller, so hand their wheel events back
@@ -587,20 +531,7 @@ export function createProjectsAppContent(initialProjectId = '') {
   openBtn.addEventListener('click', () => openStudy(Number(openBtn.dataset.wxOpen)));
 
   study.addEventListener('click', event => {
-    const target = event.target;
-    if (target.closest('[data-wx-close]')) { closeStudy(); return; }
-    if (target.closest('[data-wx-next]')) { nextProject(); return; }
-    const stepper = target.closest('[data-wx-step]');
-    if (stepper) { step(Number(stepper.dataset.wxStep)); return; }
-    const beat = target.closest('[data-wx-beat]');
-    if (beat) { const i = Number(beat.dataset.wxBeat); goBeat(i, i > beatIndex ? 1 : -1); }
-  });
-  // hovering a system area lights its node on the panel
-  bodyEl.addEventListener('mouseover', event => {
-    const row = event.target.closest('[data-wx-area]');
-    if (!row) return;
-    stopAreaCycle();
-    setAreaActive(Number(row.dataset.wxArea), true);
+    if (event.target.closest('[data-wx-close]')) closeStudy();
   });
 
   window.addEventListener('keydown', onKeydown);
@@ -631,6 +562,7 @@ export function createProjectsAppContent(initialProjectId = '') {
             subtitle: project.subtitle,
             period: project.period,
             tech: project.tech,
+            overview: project.overview,
             image: project.image || project.cover || project.screenshot || null,
             progress: (i + 1) / (n + 1)
           })),
@@ -638,10 +570,7 @@ export function createProjectsAppContent(initialProjectId = '') {
         }
       );
       canvas._workWorld = world;
-      if (studyIndex >= 0) {
-        world.setFocus(studyIndex);
-        world.setPanelState(studyIndex, panelStateFor(beats[beatIndex], beatIndex), 0, true);
-      }
+      if (studyIndex >= 0) world.setFocus(studyIndex);
     }).catch(error => {
       canvas.hidden = true;
       container.classList.add('has-static-scene');
@@ -652,7 +581,9 @@ export function createProjectsAppContent(initialProjectId = '') {
   const removalObserver = new MutationObserver(() => {
     if (container.isConnected) return;
     disposed = true;
-    stopAreaCycle();
+    cancelAnimationFrame(st.desc._wxRaf);
+    clearTimeout(st.desc._wxT);
+    clearTimeout(wheelTimer);
     world?.dispose();
     scrollArea.removeEventListener('scroll', updateScroll);
     window.removeEventListener('keydown', onKeydown);
