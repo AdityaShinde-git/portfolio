@@ -77,7 +77,7 @@ const STYLE = `
 
 .wx-pill{position:absolute;left:clamp(46px,5.2vw,78px);bottom:clamp(24px,5vh,44px);pointer-events:auto;display:inline-flex;align-items:center;
   padding:13px 24px;border:1px solid var(--wx-line);border-radius:999px;color:var(--wx-dim);text-decoration:none;font-size:11px;letter-spacing:.12em;
-  background:rgba(6,14,22,.35);backdrop-filter:blur(6px);transition:color .25s,border-color .25s,background .25s}
+  background:rgba(6,14,22,.6);transition:color .25s,border-color .25s,background .25s}
 .wx-pill:hover,.wx-pill:focus-visible{color:#fff;border-color:rgba(170,225,240,.7);background:rgba(90,170,210,.14);outline:none}
 
 /* depth gauge: scroll progress as a descent */
@@ -127,7 +127,7 @@ const STYLE = `
 .wx-study-fx{position:absolute;inset:0;pointer-events:none;
   background:radial-gradient(90% 80% at 58% 48%,color-mix(in srgb,var(--wx-accent) 24%,transparent),transparent 72%),
     linear-gradient(0deg,color-mix(in srgb,var(--wx-accent) 18%,transparent),transparent 42%)}
-.wx-study-fx::before{content:"";position:absolute;inset:-40px;opacity:.2;mix-blend-mode:screen;
+.wx-study-fx::before{content:"";position:absolute;inset:-40px;opacity:.13;will-change:transform;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='600'%3E%3Cfilter id='f' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.0035 0.55' numOctaves='2' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 1.5 0 0 0 -0.62'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E");background-size:900px 600px;
   -webkit-mask-image:radial-gradient(ellipse 40% 44% at 57% 50%,transparent 58%,#000 100%);mask-image:radial-gradient(ellipse 40% 44% at 57% 50%,transparent 58%,#000 100%);
   animation:wx-streak 1.1s steps(5) infinite}
@@ -248,8 +248,22 @@ function projectLinks(project) {
 /*  Page                                                                */
 /* ------------------------------------------------------------------ */
 
+const MNEMOSYNE = {
+  id: 'mnemosyne',
+  title: 'Mnemosyne — Local-first Personal Knowledge Graph',
+  subtitle: 'Local-first personal knowledge graph',
+  period: '2026',
+  tech: ['Python', 'FastAPI', 'PostgreSQL/pgvector', 'SQLAlchemy', 'Typer', 'JavaScript'],
+  overview: 'A knowledge-management application for capturing, organizing, searching and connecting notes, documents, bookmarks and decisions. Ingestion and indexing run asynchronously on a PostgreSQL job queue with concurrent-safe job claiming, retries and backoff. Retrieval is text, vector or hybrid, fusing ranked results with Reciprocal Rank Fusion. An editable natural-language graph-drafting workflow validates structured output and evidence, with human approval before anything is saved. REST API and CLI workflows cover capture, search, ingestion, folder watching and reindexing.',
+  liveUrl: 'https://mnemosyne-teal.vercel.app/',
+  github: 'https://github.com/AdityaShinde-git/Mnemosyne'
+};
+
 export function createProjectsAppContent(initialProjectId = '') {
-  const projects = resumeData.projects;
+  // Mnemosyne is added here when the resume data does not list it yet, so the page works either way.
+  const projects = /mnemosyne/i.test(JSON.stringify(resumeData.projects.map(p => p.title)))
+    ? resumeData.projects
+    : [...resumeData.projects, MNEMOSYNE];
   const n = projects.length;
   const reduced = !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 

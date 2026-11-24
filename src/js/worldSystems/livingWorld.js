@@ -127,11 +127,7 @@ export class LivingWorld {
       this.skyLight.groundColor.copy(ws.fog.color);
     }
     if (this.sunLight) {
-      this.sunLight.position.set(
-        -ws.sun.dir.x * 120,
-        ws.sun.dir.y * 120,
-        -ws.sun.dir.z * 120
-      );
+      // Position is owned by SkillWorld (follows the truck so shadows stay sharp).
       this.sunLight.color.copy(ws.sun.color);
       this.sunLight.intensity = Math.max(0, ws.sun.intensity * ws.weather.light);
       // Shadow softness: golden hour = softer

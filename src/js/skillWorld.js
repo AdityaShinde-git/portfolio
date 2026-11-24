@@ -222,7 +222,7 @@ export class SkillWorld {
     this.scene.background = new THREE.Color(0x202d38);
     this.scene.fog = new THREE.FogExp2(0x879092, 0.0003);
 
-    this.camera = new THREE.PerspectiveCamera(54, w / h, 0.1, compactQuality ? 1400 : 8000);
+    this.camera = new THREE.PerspectiveCamera(54, w / h, 0.1, compactQuality ? 2600 : 8000);
     this.camera.position.set(0, 7, 12);
 
     // 3. Lighting
@@ -291,6 +291,13 @@ export class SkillWorld {
     // 5. Build Environment & Obstacles
     this._buildFloor();
     this._buildEnvironment();
+    {
+      // Ford bridge heading is needed by landmarks/signposts built before _buildWorldLandmarks.
+      const approachTangent = this.roadCurves?.[0]?.getTangentAt(0.99);
+      this.fordBridgeHeading = approachTangent
+        ? Math.atan2(approachTangent.x, approachTangent.z)
+        : TRAILHEAD_HEADING;
+    }
     this._buildVehicle();
     this._buildCheckpointGates();
     this._buildSkillsNoticeboard();
@@ -3136,10 +3143,7 @@ export class SkillWorld {
     this.waterfall = falls;
 
     const bridge = new THREE.Group();
-    const approachTangent = this.roadCurves[0]?.getTangentAt(0.99);
-    const bridgeHeading = approachTangent
-      ? Math.atan2(approachTangent.x, approachTangent.z)
-      : 0;
+    const bridgeHeading = Number.isFinite(this.fordBridgeHeading) ? this.fordBridgeHeading : 0;
     this.fordBridgeHeading = bridgeHeading;
     bridge.rotation.y = bridgeHeading - Math.PI / 2;
     const bridgeRoad = this.sampleRoadSurface(FORD.x, FORD.z, 12);
@@ -5644,7 +5648,7 @@ export class SkillWorld {
 
       const body = new CANNON.Body({
         mass: 0,
-        material: this.roadMaterial,
+        material: this.groundMaterial,
         position: new CANNON.Vec3(point.x, point.y - 0.42, point.z)
       });
       body.addShape(new CANNON.Box(new CANNON.Vec3(
@@ -6835,8 +6839,8 @@ export class SkillWorld {
     if (this.garageOpen) this.exitGarage();
     this._clearControls();
     this.signalCinematic = null;
-    if (this.compactQuality && this.camera.far !== 1400) {
-      this.camera.far = 1400;
+    if (this.compactQuality && this.camera.far !== 2600) {
+      this.camera.far = this.compactQuality ? 2600 : 8000;
       this.camera.updateProjectionMatrix();
     }
     this.autoDriveTarget = null;
@@ -7179,17 +7183,18 @@ export class SkillWorld {
         this.nearbySettlementTopic = topic;
       }
     });
-    const nearestCitizen = this.settlementWalkers
-      ?.filter(walker => walker.name)
-      .map(walker => ({
-        walker,
-        distance: Math.hypot(
+    let nearestCitizen = null;
+    let nearestCitizenDist = 12;
+    if (this.settlementWalkers) {
+      for (const walker of this.settlementWalkers) {
+        if (!walker.name) continue;
+        const d = Math.hypot(
           this.carBody.position.x - walker.person.position.x,
           this.carBody.position.z - walker.person.position.z
-        )
-      }))
-      .filter(item => item.distance <= 12)
-      .sort((a, b) => a.distance - b.distance)[0];
+        );
+        if (d <= nearestCitizenDist) { nearestCitizenDist = d; nearestCitizen = { walker }; }
+      }
+    }
     this.nearbySettlementCitizen = nearestCitizen?.walker ?? null;
 
     const worldHour = this.livingWorld?.worldState.time.hour ?? 17.5;
@@ -7366,7 +7371,7 @@ export class SkillWorld {
         if (progress >= 1) {
           this.signalCinematic = null;
           if (this.compactQuality) {
-            this.camera.far = 1400;
+            this.camera.far = this.compactQuality ? 2600 : 8000;
             this.camera.updateProjectionMatrix();
           }
         }
@@ -7692,6 +7697,44 @@ export class SkillWorld {
       this.sunLight.target.updateMatrixWorld();
     }
     this._honkingThisFrame = false;
+    this._lightBudgetTimer = (this._lightBudgetTimer ?? 0) - dt;
+    if (truckPos && this._lightBudgetTimer <= 0) {
+      this._lightBudgetTimer = 0.25;
+      this._updateLightBudget(truckPos);
+    }
+  }
+
+  /**
+   * Keep a CONSTANT number of active point lights (the nearest K). A constant count
+   * means three.js never recompiles shaders as the truck drives around; far lights
+   * are hidden and rely on emissive glow instead.
+   */
+  _updateLightBudget(focus) {
+    if (!this._budgetLights) {
+      const lightning = this.livingWorld?.weather?._lightningLight;
+      const exempt = new Set([this.garagePointLight, lightning].filter(Boolean));
+      const lights = [];
+      this.scene.traverse(object => {
+        if (!object.isPointLight || exempt.has(object)) return;
+        for (let a = object.parent; a; a = a.parent) {
+          if (a === this.horizonLight) return;
+        }
+        lights.push(object);
+      });
+      this._budgetLights = lights;
+      this._budgetSize = this.compactQuality ? 4 : 8;
+      this._budgetPos = new THREE.Vector3();
+    }
+    const lights = this._budgetLights;
+    if (lights.length <= this._budgetSize) return;
+    const scored = lights.map(light => {
+      light.getWorldPosition(this._budgetPos);
+      const dx = this._budgetPos.x - focus.x;
+      const dz = this._budgetPos.z - focus.z;
+      return { light, d: dx * dx + dz * dz };
+    });
+    scored.sort((a, b) => a.d - b.d);
+    for (let i = 0; i < scored.length; i++) scored[i].light.visible = i < this._budgetSize;
   }
 
   dispose() {

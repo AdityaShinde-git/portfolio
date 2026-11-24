@@ -1127,6 +1127,21 @@ export class WorkWorld {
     this._buildInk();
     this._buildShed();
     this._buildComposer(bounds);
+    // compile shaders and build the film worlds in the background, one small step per idle slice, never blocking
+    // the main thread: the page stays smooth if the visitor scrolls or opens a card straight away
+    this._warmQueue = [() => this._warmShaders(), ...this.cards.filter(c => c.art.reel).map(c => () => c.art.reel.warm())];
+    this._warmNext = () => {
+      if (this.disposed) return;
+      const step = this._warmQueue.shift();
+      if (!step) return;
+      let p;
+      try { p = step(); } catch (e) { p = null; }
+      Promise.resolve(p).catch(() => {}).then(() => {
+        const idle = window.requestIdleCallback || (f => setTimeout(f, 80));
+        idle(() => this._warmNext(), { timeout: 400 });
+      });
+    };
+    this._warmTimers = [setTimeout(() => this._warmNext(), 600)];
 
     this.resizeObserver = new ResizeObserver(this._resize);
     this.resizeObserver.observe(this.canvas.parentElement);
@@ -1164,7 +1179,7 @@ export class WorkWorld {
     const envTex = this.envTarget.texture;
 
     /* --- spine: a thick, sculpted body --- */
-    let geo = new THREE.CylinderGeometry(1, 1, H, this.compact ? 72 : 112, this.compact ? 480 : 760, true);
+    let geo = new THREE.CylinderGeometry(1, 1, H, this.compact ? 56 : 96, this.compact ? 380 : 600, true);
     const pos = geo.attributes.position;
     for (let i = 0; i < pos.count; i += 1) {
       const y = pos.getY(i) + mid;
@@ -1594,6 +1609,15 @@ export class WorkWorld {
 
   /* ---------- cursor dissolve: beads lifting off the focused card ---------- */
 
+  _warmShaders() {
+    if (this.disposed || !this.shed) return Promise.resolve();
+    this.shed.visible = true;
+    let p;
+    try { p = this.renderer.compileAsync(this.scene, this.camera); } catch (e) { p = Promise.resolve(); } // collected now, compiled off-thread
+    this.shed.visible = false;
+    return p;
+  }
+
   _buildShed() {
     const rand = seededRandom(4409);
     const cell = 6.6 / (this.compact ? 150 : 230);
@@ -1695,7 +1719,7 @@ export class WorkWorld {
     this.composer.addPass(new RenderPass(this.scene, this.camera));
 
     this.bloom = new UnrealBloomPass(
-      new THREE.Vector2(bounds.width, bounds.height),
+      new THREE.Vector2(bounds.width / 2, bounds.height / 2), // bloom is soft anyway: half resolution is much cheaper
       this.compact ? 0.18 : 0.26,
       0.55,
       0.9
@@ -1822,7 +1846,8 @@ export class WorkWorld {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(bounds.width, bounds.height, false);
     this.composer.setSize(bounds.width, bounds.height);
-    this.bloom.setSize(bounds.width, bounds.height);
+    this.bloom.setSize(bounds.width / 2, bounds.height / 2);
+    this._applyQuality();
   }
 
   /* ---------- frame loop ---------- */
@@ -1838,16 +1863,16 @@ export class WorkWorld {
 
     const target = clamp01(this.getProgress());
     const prev = this.progress;
-    this.progress += (target - prev) * (this.reduced ? 1 : 1 - Math.exp(-delta * 3.4));
+    this.progress += (target - prev) * (this.reduced ? 1 : 1 - Math.exp(-delta * 6.5));
     const rawVel = delta > 0 ? Math.abs(this.progress - prev) / delta : 0;
     this.intro = this.reduced ? 1 : Math.min(1, this.intro + delta / INTRO_SECONDS);
     const introE = 1 - Math.pow(1 - this.intro, 3); // ease-out cubic
     this.pulse *= Math.exp(-delta * 2.6);
     const wantedVel = this.reduced ? 0 : Math.min(rawVel * 5 + this.pulse * 0.9 + (1 - introE) * 0.9, 1.5);
-    this.velocity += (wantedVel - this.velocity) * (1 - Math.exp(-delta * 6));
+    this.velocity += (wantedVel - this.velocity) * (1 - Math.exp(-delta * 9));
 
     const m = this.reduced ? new THREE.Vector2() : this.mouse;
-    this.mouseSmooth.lerp(m, 1 - Math.exp(-delta * 3));
+    this.mouseSmooth.lerp(m, 1 - Math.exp(-delta * 7));
 
     const p = this.progress;
     const radial = this._radial(p, CAMERA_PHASE);
@@ -1896,12 +1921,14 @@ export class WorkWorld {
     this.scene.background.copy(this._baseBg).lerp(this._tint, sm);
     this.scene.fog.color.copy(this.scene.background);
     this.scene.fog.density = THREE.MathUtils.lerp(0.0105, 0.1, sm);
-    this.hero.visible = sm < 0.985;
+    const open = sm > 0.985; // a case study is fully open: nothing behind it needs drawing
+    this.hero.visible = !open;
     const fade = 1 - sm;
+    this.particles.visible = fade > 0.01;
     this.dust.material.uniforms.uFade.value = fade;
     this.motes.material.uniforms.uFade.value = fade;
     this.particleMaterial.uniforms.uFade.value = fade;
-    const k = 1 - Math.exp(-delta * (this.reduced ? 40 : 4.5));
+    const k = 1 - Math.exp(-delta * (this.reduced ? 40 : 7.5));
 
     // where the pointer touches the focused panel (uv), if it does
     const fc = this.focusIndex >= 0 ? this.cards[this.focusIndex] : null;
@@ -1935,7 +1962,7 @@ export class WorkWorld {
       reveal = Math.max(reveal * dim * dimF, e);
       const wasHidden = card.reveal < 0.02;
       card.reveal = reveal;
-      card.group.visible = reveal > 0.005;
+      card.group.visible = reveal > 0.005 && (!open || isFocus);
 
       // fly between the path pose and the camera-facing pose
       card.group.position.lerpVectors(card.basePos, this._target, e);
@@ -1944,7 +1971,7 @@ export class WorkWorld {
       card.group.scale.setScalar(THREE.MathUtils.lerp(baseScale, this.compact ? 0.78 : 1.22, e));
 
       const isHover = this.cards[this.hoverIndex] === card;
-      card.hover += ((isHover ? 1 : 0) - card.hover) * (1 - Math.exp(-delta * 8));
+      card.hover += ((isHover ? 1 : 0) - card.hover) * (1 - Math.exp(-delta * 12));
 
       // gentle tilt toward the pointer on hover, and parallax while focused
       const tilt = Math.max(card.hover, e * 0.25);
@@ -1966,11 +1993,14 @@ export class WorkWorld {
       const rl = card.art.reel;
       if (rl) {
         if (card === fc && e > 0.05) {
-          if (!rl.on) {
+          if (!rl.on && !rl.ready) {
+            rl.warm(); // not built yet (the visitor was quick): keep the still art and let it finish off-thread
+          } else if (!rl.on) {
             rl.on = true;
             rl.reset(this.reduced ? 2.4 : 0);
             card.material.uniforms.uMap.value = rl.texture;
           } else if (!this.reduced) {
+            rl.setQuality(this._gov ? this._gov.level : 3);
             rl.update(Math.min(delta, 0.05));
           }
         } else if (rl.on && e < 0.02) {
@@ -2029,13 +2059,53 @@ export class WorkWorld {
     lu.uGrain.value = this.reduced ? 0.012 : 0.028;
     lu.uIntro.value = introE;
 
+    this._governQuality(now);
     this.composer.render(delta);
+  }
+
+  // Keeps the frame rate smooth on any machine: if frames take too long the render resolution steps down,
+  // and when there is plenty of headroom it steps back up (more cautiously each time it had to retreat).
+  _governQuality(now) {
+    const g = (this._gov ||= { ema: 16.7, last: now, level: 3, t: 0, hold: 6, calm: 0 });
+    const dt = now - g.last;
+    g.last = now;
+    if (dt > 250) return; // a tab switch or a stall, not a real measurement
+    g.ema += (dt - g.ema) * 0.06;
+    g.t += dt / 1000;
+    if (g.t < 1.2) return;
+    g.t = 0;
+    if (g.ema > 22 && g.level > 0) {
+      g.level -= 1;
+      g.calm = 0;
+      g.hold = Math.min(g.hold * 1.8, 60);
+      this._applyQuality();
+    } else if (g.ema < 18.5 && g.level < 3) {
+      g.calm += 1.2;
+      if (g.calm >= g.hold) { g.level += 1; g.calm = 0; this._applyQuality(); }
+    } else if (g.ema >= 18.5) {
+      g.calm = 0;
+    }
+  }
+
+  _applyQuality() {
+    const g = this._gov;
+    if (!g || !this.renderer || !this.composer) return;
+    const base = Math.min(window.devicePixelRatio || 1, this.compact ? 1.25 : 1.75);
+    const dpr = base * [0.55, 0.7, 0.85, 1][g.level];
+    if (Math.abs(dpr - this.renderer.getPixelRatio()) < 0.01) return;
+    const bounds = this.canvas.parentElement.getBoundingClientRect();
+    this.renderer.setPixelRatio(dpr);
+    this.renderer.setSize(bounds.width, bounds.height, false);
+    this.composer.setPixelRatio(dpr);
+    this.composer.setSize(bounds.width, bounds.height);
+    this.bloom.setSize(bounds.width / 2, bounds.height / 2);
   }
 
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
     cancelAnimationFrame(this.frameId);
+    (this._warmTimers || []).forEach(clearTimeout);
     this.resizeObserver?.disconnect();
     window.removeEventListener('pointermove', this._onPointerMove);
     window.removeEventListener('click', this._onClick);
