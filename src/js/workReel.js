@@ -14,11 +14,13 @@ import { getRally } from './rallyScene.js';
 import { getGraph } from './worldGraph.js';
 import { getCity } from './worldCity.js';
 import { getChat } from './worldChat.js';
+import { getMemory } from './worldMemory.js';
 
 // which film suits the project: the knowledge graph, the night city, or (for driving) the rally stage
 function pickWorld(project) {
   const t = `${project.title} ${project.subtitle || ''} ${project.overview || ''} ${(project.tech || []).join(' ')}`.toLowerCase();
   if (/rally|racing|\bcar\b|driv|vehicle|automotive/.test(t)) return getRally;
+  if (/mnemosyne|local-first|second brain|personal knowledge|knowledge graph/.test(t)) return getMemory;
   if (/chat|messag|socket|conversation|real-?time|presence|social/.test(t)) return getChat;
   if (/graph|knowledge|\bnotes?\b|vector|embedding|semantic|retriev|search|memory|network/.test(t)) return getGraph;
   return getCity;
